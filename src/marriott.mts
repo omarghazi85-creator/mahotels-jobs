@@ -50,7 +50,7 @@ export function parseMarriottJob(html: string, url: string): Vacancy | undefined
 export async function collectMarriott(limit = 2): Promise<Vacancy[]> {
   const listing = new URL('https://careers.marriott.com/jobs');
   // Filter the official search page; do not rely on external jobs aggregators.
-  listing.searchParams.set('location', 'Saudi Arabia');
+  listing.searchParams.set('filter[country][0]', 'Saudi Arabia');
   const res = await fetch(listing, { signal: AbortSignal.timeout(12000) });
   if (!res.ok) throw new Error('Marriott listing status ' + res.status);
   const html = await res.text();
