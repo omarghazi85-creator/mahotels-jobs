@@ -3,7 +3,7 @@
  * A source is deliberately rejected rather than filled with guessed metadata.
  */
 export type Vacancy = {
-  source: 'accor' | 'radisson' | 'rotana';
+  source: 'accor' | 'radisson' | 'rotana' | 'marriott';
   originalId: string;
   title: string;
   company: string;
