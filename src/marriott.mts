@@ -38,7 +38,10 @@ export function parseMarriottJob(html: string, url: string): Vacancy | undefined
   const anchors = [...html.matchAll(/<a\b([^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*)>([\s\S]*?)<\/a\s*>/gi)];
   const applyAnchors = anchors.filter((match) =>
     /\bApply\s+Now\b/i.test(plain(match[3])) && validateApplyUrl(match[2]));
-  const applyUrl = applyAnchors.length === 1 ? validateApplyUrl(applyAnchors[0][2]) : undefined;
+  // Marriott commonly repeats the same Apply Now link above and below the job.
+  // Accept repeated identical targets, but refuse multiple different destinations.
+  const targets = [...new Set(applyAnchors.map((anchor) => validateApplyUrl(anchor[2])))];
+  const applyUrl = targets.length === 1 ? targets[0] : undefined;
   const sourceUrl = validateApplyUrl(url);
   if (!id || !title || !description || !country || !city || !applyUrl || !sourceUrl) return;
   if (new URL(sourceUrl).hostname !== 'careers.marriott.com') return;
