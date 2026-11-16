@@ -1,4 +1,4 @@
-import { normalizeApplyUrl, normalizeCountry, type Vacancy } from './sources.mts';
+import { validateApplyUrl, normalizeCountry, type Vacancy } from './sources.mts';
 
 type JsonLd = Record<string, unknown>;
 const str = (x: unknown) => typeof x === 'string' ? x.trim() : '';
@@ -36,8 +36,8 @@ export function parseMarriottJob(html: string, url: string): Vacancy | undefined
   const applyLabelIndex = html.indexOf('Apply Now');
   const precedingHtml = applyLabelIndex < 0 ? '' : html.slice(Math.max(0, applyLabelIndex - 1500), applyLabelIndex);
   const hrefs = [...precedingHtml.matchAll(/href=["']([^"']+)["']/gi)];
-  const applyUrl = normalizeApplyUrl(hrefs.at(-1)?.[1]);
-  const sourceUrl = normalizeApplyUrl(url);
+  const applyUrl = validateApplyUrl(hrefs.at(-1)?.[1]);
+  const sourceUrl = validateApplyUrl(url);
   if (!id || !title || !description || !country || !city || !applyUrl || !sourceUrl) return;
   if (new URL(sourceUrl).hostname !== 'careers.marriott.com') return;
   const posting = str(entry.datePosted);
