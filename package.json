@@ -8,8 +8,8 @@
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
-    "@netlify/blobs": "^9.0.0",
-    "@netlify/functions": "^3.0.0"
+    "@netlify/blobs": "11.1.9",
+    "@netlify/functions": "6.1.1"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
