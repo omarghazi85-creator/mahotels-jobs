@@ -56,12 +56,13 @@ export function normalizeApplyUrl(value: unknown): string | undefined {
   } catch { return; }
 }
 async function smartRecruiters(companyId: 'AccorHotel' | 'RHG', source: 'accor' | 'radisson', limit: number): Promise<Vacancy[]> {
-  const data = await load('https://api.smartrecruiters.com/v1/companies/' + companyId + '/postings?limit=' + Math.min(limit, 100));
+  const data = await load('https://api.smartrecruiters.com/v1/companies/' + companyId + '/postings?limit=100');
   if (!data || typeof data !== 'object') throw Error('Invalid SmartRecruiters response');
   const rows = (data as { content?: unknown }).content;
   if (!Array.isArray(rows)) throw Error('Missing SmartRecruiters content');
   const vacancies: Vacancy[] = [];
-  for (const row of rows.slice(0, limit)) {
+  for (const row of rows) {
+    if (vacancies.length >= limit) break;
     if (!row || typeof row !== 'object') continue;
     const x = row as Record<string, any>;
     const loc = x.location ?? {};
@@ -99,11 +100,12 @@ export async function collectRotana(limit = 10): Promise<Vacancy[]> {
   const body = data as Record<string, any>;
   const rows = Array.isArray(body?.jobs) ? body.jobs : Array.isArray(body?.openings) ? body.openings : [];
   const result: Vacancy[] = [];
-  for (const raw of rows.slice(0, limit)) {
+  for (const raw of rows) {
+    if (result.length >= limit) break;
     const id = text(raw?.shortcode ?? raw?.id?.toString());
     const title = text(raw?.title);
-    const city = text(raw?.location?.city);
-    const country = normalizeCountry(raw?.location?.country_code ?? raw?.location?.country);
+    const city = text(raw?.city ?? raw?.location?.city);
+    const country = normalizeCountry(raw?.country ?? raw?.location?.country_code ?? raw?.location?.country);
     const applyUrl = normalizeApplyUrl(raw?.application_url ?? raw?.url);
     const sourceUrl = text(raw?.url);
     const description = clean(raw?.description);
