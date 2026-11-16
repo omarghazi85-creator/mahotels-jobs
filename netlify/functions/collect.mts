@@ -63,10 +63,13 @@ export default async (request: Request) => {
   let collected = 0;
   let translated = 0;
   const collectors = [collectAccor, collectRadisson, collectRotana, collectMarriott] as const;
-  for (const collect of collectors) {
+  // Rotate official sources by UTC date so a daily cap of two does not favor Accor forever.
+  const offset = Math.floor(Date.parse(date + 'T00:00:00.000Z') / 86400000) % collectors.length;
+  const dailyOrder = [...collectors.slice(offset), ...collectors.slice(0, offset)];
+  for (const collect of dailyOrder) {
     if (collected >= limit) break;
     let jobs: Vacancy[];
-    try { jobs = await collect(limit); }
+    try { jobs = await collect(5); }
     catch (error) { console.error('Source failure', String(error)); continue; }
     for (const job of jobs) {
       if (collected >= limit) break;
