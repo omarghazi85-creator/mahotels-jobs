@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
-    "check:function-bundles": "esbuild netlify/functions/collect.mts netlify/functions/publish.mts netlify/functions/daily-dispatch.mts --bundle --platform=node --format=esm --packages=external --outdir=.ci-function-bundles"
+    "check:function-bundles": "esbuild netlify/functions/collect.mts netlify/functions/publish.mts netlify/functions/daily-dispatch.mts netlify/functions/health.mts --bundle --platform=node --format=esm --packages=external --outdir=.ci-function-bundles"
   },
   "dependencies": {
     "@netlify/blobs": "11.1.9",
