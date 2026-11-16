@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "check:function-bundles": "esbuild netlify/functions/collect.mts netlify/functions/publish.mts netlify/functions/daily-dispatch.mts --bundle --platform=node --format=esm --packages=external --outdir=.ci-function-bundles"
   },
   "dependencies": {
     "@netlify/blobs": "11.1.9",
@@ -13,6 +14,7 @@
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "esbuild": "0.25.12"
   }
 }
