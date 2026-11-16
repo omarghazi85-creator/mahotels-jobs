@@ -33,10 +33,12 @@ export function parseMarriottJob(html: string, url: string): Vacancy | undefined
   const city = str(address.addressLocality);
   const idItem = entry.identifier;
   const id = typeof idItem === 'object' && idItem !== null ? str((idItem as JsonLd).value) : str(idItem);
-  const applyLabelIndex = html.indexOf('Apply Now');
-  const precedingHtml = applyLabelIndex < 0 ? '' : html.slice(Math.max(0, applyLabelIndex - 1500), applyLabelIndex);
-  const hrefs = [...precedingHtml.matchAll(/href=["']([^"']+)["']/gi)];
-  const applyUrl = validateApplyUrl(hrefs.at(-1)?.[1]);
+  // Only accept the href of the actual "Apply Now" anchor, not an unrelated
+  // preceding link (navigation, tracking, or a different vacancy).
+  const anchors = [...html.matchAll(/<a\b([^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*)>([\s\S]*?)<\/a\s*>/gi)];
+  const applyAnchors = anchors.filter((match) =>
+    /\bApply\s+Now\b/i.test(plain(match[3])) && validateApplyUrl(match[2]));
+  const applyUrl = applyAnchors.length === 1 ? validateApplyUrl(applyAnchors[0][2]) : undefined;
   const sourceUrl = validateApplyUrl(url);
   if (!id || !title || !description || !country || !city || !applyUrl || !sourceUrl) return;
   if (new URL(sourceUrl).hostname !== 'careers.marriott.com') return;
