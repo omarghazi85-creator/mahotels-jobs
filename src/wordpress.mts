@@ -53,9 +53,9 @@ export function renderDraft(job: SavedJob) {
   const sourceDetails = '<p><strong>المصدر:</strong> ' + escapeHTML(job.source) +
     '<br><strong>معرّف الإعلان:</strong> ' + escapeHTML(job.originalId) + '</p>';
   const hotel = job.hotel?.trim() ? '<br><strong>الفندق:</strong> ' + escapeHTML(job.hotel) : '';
-  const posted = job.postedAt && /^20\\d{2}-\\d{2}-\\d{2}/.test(job.postedAt)
+  const posted = job.postedAt && /^20\d{2}-\d{2}-\d{2}/.test(job.postedAt)
     ? '<p><strong>تاريخ الإعلان:</strong> ' + escapeHTML(job.postedAt.slice(0, 10)) + '</p>' : '';
-  const expiry = job.expiresAt && /^20\\d{2}-\\d{2}-\\d{2}/.test(job.expiresAt)
+  const expiry = job.expiresAt && /^20\d{2}-\d{2}-\d{2}/.test(job.expiresAt)
     ? '<p><strong>تاريخ انتهاء التقديم:</strong> ' + escapeHTML(job.expiresAt.slice(0, 10)) + '</p>' : '';
   const content = '<p><strong>الشركة:</strong> ' + escapeHTML(job.company) + hotel +
     '<br><strong>المدينة:</strong> ' + escapeHTML(job.city) + '</p>' +
