@@ -1,4 +1,4 @@
-import { normalizeApplyUrl } from './sources.mjs';
+import { normalizeApplyUrl } from './sources.mts';
 
 export type SavedJob = {
   key: string; source: string; originalId: string; title: string;
