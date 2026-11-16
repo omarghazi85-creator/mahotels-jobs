@@ -42,11 +42,23 @@ const digest = async (value: string) => Array.from(
   new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))
 ).map(x => x.toString(16).padStart(2, '0')).join('');
 
-export default async () => {
+export default async (request: Request) => {
+  const token = env('INTERNAL_DISPATCH_TOKEN');
+  const provided = request.headers.get('x-mahotels-dispatch-token') ?? '';
+  if (!token || token.length < 32 || !provided || provided !== token) {
+    console.error('Unauthorized collection invocation');
+    return;
+  }
   if (env('JOBS_EMERGENCY_STOP') !== 'false' || env('ENABLE_COLLECTION') !== 'true') {
     console.log('MAHotels collection disabled'); return;
   }
   const limit = safeLimit();
+  // Claim the UTC day atomically before doing paid or external work. Fail closed if interrupted.
+  // This intentionally sacrifices automatic retries to avoid duplicate daily batches.
+  const date = new Date().toISOString().slice(0, 10);
+  const claims = getStore('mahotels-jobs-daily-claims-v1');
+  const claim = await claims.set('daily-' + date, date, { onlyIfNew: true });
+  if (!claim.modified) { console.log('Daily batch already claimed', date); return; }
   const store = getStore('mahotels-jobs-v1');
   let collected = 0;
   let translated = 0;
@@ -77,5 +89,5 @@ export default async () => {
   }
   console.log(JSON.stringify({ collected, translated, limit, publish_enabled: false }));
 };
-// Single daily collection tick. Publishing remains manual until WordPress field parity is verified.
-export const config: Config = { schedule: '0 2 * * *' };
+// Long-running collection runs separately from the short scheduled dispatcher.
+export const config: Config = { background: true };
