@@ -33,7 +33,9 @@ export function parseMarriottJob(html: string, url: string): Vacancy | undefined
   const city = str(address.addressLocality);
   const idItem = entry.identifier;
   const id = typeof idItem === 'object' && idItem !== null ? str((idItem as JsonLd).value) : str(idItem);
-  const applyUrl = normalizeApplyUrl(entry.directApply === true ? entry.url : (entry.url ?? url));
+  const applicationAnchor = [...html.matchAll(/<a\\b[^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi)]
+    .find(m => /Apply Now/i.test(m[2].replace(/<[^>]+>/g, ' ')));
+  const applyUrl = normalizeApplyUrl(applicationAnchor?.[1]);
   const sourceUrl = normalizeApplyUrl(url);
   if (!id || !title || !description || !country || !city || !applyUrl || !sourceUrl) return;
   if (new URL(sourceUrl).hostname !== 'careers.marriott.com') return;
