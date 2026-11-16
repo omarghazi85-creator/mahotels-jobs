@@ -1,5 +1,5 @@
 import { getStore } from '@netlify/blobs';
-import { applicationLink, duplicateLinks, jobSlug, renderDraft, type SavedJob } from '../../src/wordpress.mjs';
+import { applicationLink, duplicateLinks, jobSlug, renderDraft, type SavedJob } from '../../src/wordpress.mts';
 const env = (name: string) => Netlify.env.get(name) ?? '';
 
 type Post = {
