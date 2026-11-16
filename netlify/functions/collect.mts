@@ -53,6 +53,12 @@ export default async (request: Request) => {
     console.log('MAHotels collection disabled'); return;
   }
   const limit = safeLimit();
+  // Never consume the one-per-day claim when no translation credentials exist.
+  // A valid secret is configured via Netlify, never stored in repository code.
+  if (!env('GROQ_API_KEY').trim()) {
+    console.error('Groq translation not configured; daily claim untouched');
+    return;
+  }
   // Claim the UTC day atomically before doing paid or external work. Fail closed if interrupted.
   // This intentionally sacrifices automatic retries to avoid duplicate daily batches.
   const date = new Date().toISOString().slice(0, 10);
@@ -62,21 +68,23 @@ export default async (request: Request) => {
   const store = getStore('mahotels-jobs-v1');
   let collected = 0;
   let translated = 0;
+  let attempts = 0;
   const collectors = [collectAccor, collectRadisson, collectRotana, collectMarriott] as const;
   // Rotate official sources by UTC date so a daily cap of two does not favor Accor forever.
   const offset = Math.floor(Date.parse(date + 'T00:00:00.000Z') / 86400000) % collectors.length;
   const dailyOrder = [...collectors.slice(offset), ...collectors.slice(0, offset)];
   for (const collect of dailyOrder) {
-    if (collected >= limit) break;
+    if (collected >= limit || attempts >= limit) break;
     let jobs: Vacancy[];
     try { jobs = await collect(5); }
     catch (error) { console.error('Source failure', String(error)); continue; }
     for (const job of jobs) {
-      if (collected >= limit) break;
+      if (collected >= limit || attempts >= limit) break;
       if (!normalizeApplyUrl(job.applyUrl)) continue;
       if (job.expiresAt && Date.parse(job.expiresAt) < Date.now()) continue;
       const key = await digest(job.source + '|' + job.originalId);
       if (await store.get(key)) continue;
+      attempts++;
       try {
         const arabic = await translate(job);
         const result = await store.setJSON(key, {
@@ -90,7 +98,7 @@ export default async (request: Request) => {
       }
     }
   }
-  console.log(JSON.stringify({ collected, translated, limit, publish_enabled: false }));
+  console.log(JSON.stringify({ collected, translated, attempts, limit, publish_enabled: false }));
 };
 // Long-running collection runs separately from the short scheduled dispatcher.
 export const config: Config = { background: true };
