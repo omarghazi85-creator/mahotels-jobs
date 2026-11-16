@@ -34,3 +34,15 @@ test('Marriott rejects an unrelated link immediately before an Apply Now label',
   })+'</script><a href="https://careers.example.com/other-job">Other</a><div>Apply Now</div>';
   assert.equal(parseMarriottJob(html,url),undefined);
 });
+
+test('Marriott accepts the same Apply Now target repeated twice, rejects conflicting targets', () => {
+  const json=JSON.stringify({
+    '@type':'JobPosting',title:'Host',description:'Receive guests',
+    identifier:{value:'P1-999'},jobLocation:{address:{addressLocality:'Riyadh',addressCountry:'Saudi Arabia'}}
+  });
+  const first='<a href="https://ejwl.fa.us2.oraclecloud.com/apply?id=999">Apply Now</a>';
+  const second='<a href="https://other.example.org/apply?id=999">Apply Now</a>';
+  const markup='<script type="application/ld+json">'+json+'</script>';
+  assert.equal(parseMarriottJob(markup+first+first,url)?.applyUrl,'https://ejwl.fa.us2.oraclecloud.com/apply?id=999');
+  assert.equal(parseMarriottJob(markup+first+second,url),undefined);
+});
