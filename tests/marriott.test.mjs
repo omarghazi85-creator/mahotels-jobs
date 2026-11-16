@@ -26,3 +26,11 @@ test('Marriott postings without a verified country or id are rejected', () => {
   })+'</script>';
   assert.equal(parseMarriottJob(html, url), undefined);
 });
+
+test('Marriott rejects an unrelated link immediately before an Apply Now label', () => {
+  const html='<script type="application/ld+json">'+JSON.stringify({
+    '@type':'JobPosting',title:'Host',description:'Receive guests',
+    identifier:{value:'P1-999'},jobLocation:{address:{addressLocality:'Riyadh',addressCountry:'Saudi Arabia'}}
+  })+'</script><a href="https://careers.example.com/other-job">Other</a><div>Apply Now</div>';
+  assert.equal(parseMarriottJob(html,url),undefined);
+});
