@@ -61,6 +61,37 @@ test('collector requires Groq secret before claiming daily quota or fetching sou
   assert.equal(response,undefined);
   // No external calls: the test replaces fetch with a throwing function.
 });
+
+test('WP duplicate audit scans every page and canonicalizes source application URLs', async () => {
+  const {auditAll}=await import('../netlify/functions/publish.mts');
+  const calls=[];
+  globalThis.fetch=async (url) => {
+    const u=new URL(url);
+    const page=Number(u.searchParams.get('page'));
+    calls.push(page);
+    const pages={
+      1:[{id:45106,content:{raw:'<a href="https://jobs.example.org/apply?id=55&amp;utm_source=site">التقديم</a>'}}],
+      2:[{id:45059,content:{raw:'<p>draft</p>'},meta:{job_source_url:'https://careers.example.org/job/P1-1234'}}]
+    };
+    return new Response(JSON.stringify(pages[page]??[]),{
+      status:200,headers:{'X-WP-TotalPages':'2','Content-Type':'application/json'}
+    });
+  };
+  try {
+    const result=await auditAll(new URL('https://mahotels.net/wp-json/wp/v2/ma_hotel_job'),{});
+    assert.deepEqual(calls,[1,2]);
+    assert.equal(result.checked,2);
+    assert.ok(result.known.has('https://jobs.example.org/apply?id=55'));
+    assert.ok(result.known.has('https://careers.example.org/job/P1-1234'));
+  } finally {globalThis.fetch=forbiddenFetch}
+});
+test('WP duplicate audit stops rather than proceeding with incomplete or malformed pages', async () => {
+  const {auditAll}=await import('../netlify/functions/publish.mts');
+  const endpoint=new URL('https://mahotels.net/wp-json/wp/v2/ma_hotel_job');
+  globalThis.fetch=async()=>new Response('[{"id":7}]',{status:200,headers:{'X-WP-TotalPages':'1'}});
+  try {await assert.rejects(auditAll(endpoint,{}),/Audit content missing/)}
+  finally {globalThis.fetch=forbiddenFetch}
+});
 test.after(()=>{
   globalThis.fetch=savedFetch;
   if (savedNetlify === undefined) delete globalThis.Netlify;
