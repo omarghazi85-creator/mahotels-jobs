@@ -1,4 +1,4 @@
-import { normalizeApplyUrl, normalizeCountry, type Vacancy } from './sources.mjs';
+import { normalizeApplyUrl, normalizeCountry, type Vacancy } from './sources.mts';
 
 type JsonLd = Record<string, unknown>;
 const str = (x: unknown) => typeof x === 'string' ? x.trim() : '';
