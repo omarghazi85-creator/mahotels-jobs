@@ -34,3 +34,17 @@ for (const [source, url] of Object.entries(endpoints)) {
       locationKeys:Object.keys(location), countries, sample}));
   } catch (e) {console.error(JSON.stringify({source, error:String(e)}));}
 }
+
+try {
+  const example = 'https://careers.marriott.com/saudi-arabia-voyage-program-march-2027-revenue-management/job/P1-7341523-0';
+  const r = await fetch(example, {signal:AbortSignal.timeout(12000)});
+  const html = r.ok ? await r.text() : '';
+  const scripts = [...html.matchAll(/<script\\b([^>]+)>([\\s\\S]*?)<\\/script>/gi)];
+  const ldScripts = scripts.filter(m=>/ld\\+json/i.test(m[1]));
+  const { parseMarriottJob } = await import('../src/marriott.mts');
+  const parsed = parseMarriottJob(html, example);
+  console.log(JSON.stringify({source:'marriott-single',status:r.status,htmlLength:html.length,
+    scriptCount:scripts.length,jsonLdCount:ldScripts.length,
+    jobPostingMarkup:/JobPosting/.test(html),countryFound:/Saudi Arabia/.test(html),
+    parsed:Boolean(parsed),reasonsToInspect: parsed ? [] : ['JSON-LD structure, posting identifiers, location and application URL']}));
+} catch (error) {console.error(JSON.stringify({source:'marriott-single',error:String(error)}));}
