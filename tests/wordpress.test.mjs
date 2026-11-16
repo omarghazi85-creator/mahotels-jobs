@@ -34,3 +34,11 @@ test('duplicate extraction normalizes tracking and fails closed on missing conte
   assert.throws(()=>duplicateLinks({}));
   assert.equal(jobSlug(sample), 'ma-jobs-' + 'a'.repeat(32));
 });
+
+test('verified source posting/expiry dates are included, missing dates are not invented', () => {
+  const dated = renderDraft({...sample, postedAt:'2026-11-12T00:00:00.000Z', expiresAt:'2026-12-01T00:00:00.000Z'});
+  assert.match(dated.content, /2026-11-12/);
+  assert.match(dated.content, /2026-12-01/);
+  const undated = renderDraft({...sample, postedAt:undefined,expiresAt:undefined});
+  assert.doesNotMatch(undated.content, /تاريخ الإعلان|تاريخ انتهاء التقديم/);
+});
