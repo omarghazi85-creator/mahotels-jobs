@@ -1,7 +1,7 @@
 import { getStore } from '@netlify/blobs';
-import { collectMarriott } from '../../src/marriott.mjs';
+import { collectMarriott } from '../../src/marriott.mts';
 import type { Config } from '@netlify/functions';
-import { collectAccor, collectRadisson, collectRotana, normalizeApplyUrl, type Vacancy } from '../../src/sources.mjs';
+import { collectAccor, collectRadisson, collectRotana, normalizeApplyUrl, type Vacancy } from '../../src/sources.mts';
 
 const env = (name: string) => Netlify.env.get(name) ?? '';
 const safeLimit = () => Math.min(2, Math.max(1, Number(env('MAX_JOBS_PER_DAY') || 2) || 2));
