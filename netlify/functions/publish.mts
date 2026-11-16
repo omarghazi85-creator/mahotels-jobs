@@ -24,7 +24,7 @@ async function inspectBySlug(endpoint: URL, slug: string, headers: Record<string
   if (!Array.isArray(posts)) throw Error('Invalid WP slug lookup');
   return posts as Post[];
 }
-async function auditAll(endpoint: URL, headers: Record<string,string>) {
+export async function auditAll(endpoint: URL, headers: Record<string,string>) {
   const known = new Set<string>();
   let expectedPages: number | undefined;
   let checked = 0;
