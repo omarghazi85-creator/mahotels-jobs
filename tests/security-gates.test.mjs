@@ -49,6 +49,18 @@ test('read-only health never reveals secrets or internal tokens', async () => {
   assert.ok(!payload.includes('SECRET'));
   assert.equal(response.headers.get('Cache-Control'),'no-store');
 });
+test('collector requires Groq secret before claiming daily quota or fetching sources', async () => {
+  vars.clear();
+  const credential = 'x'.repeat(64);
+  vars.set('JOBS_EMERGENCY_STOP','false');
+  vars.set('ENABLE_COLLECTION','true');
+  vars.set('INTERNAL_DISPATCH_TOKEN',credential);
+  const response = await collect(new Request('https://example.org/.netlify/functions/collect',{
+    method:'POST',headers:{'x-mahotels-dispatch-token':credential}
+  }));
+  assert.equal(response,undefined);
+  // No external calls: the test replaces fetch with a throwing function.
+});
 test.after(()=>{
   globalThis.fetch=savedFetch;
   if (savedNetlify === undefined) delete globalThis.Netlify;
