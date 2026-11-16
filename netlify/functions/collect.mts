@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { collectMarriott } from '../../src/marriott.mjs';
 import type { Config } from '@netlify/functions';
 import { collectAccor, collectRadisson, collectRotana, normalizeApplyUrl, type Vacancy } from '../../src/sources.mjs';
 
@@ -49,7 +50,7 @@ export default async () => {
   const store = getStore('mahotels-jobs-v1');
   let collected = 0;
   let translated = 0;
-  const collectors = [collectAccor, collectRadisson, collectRotana] as const;
+  const collectors = [collectAccor, collectRadisson, collectRotana, collectMarriott] as const;
   for (const collect of collectors) {
     if (collected >= limit) break;
     let jobs: Vacancy[];
