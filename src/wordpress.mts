@@ -1,4 +1,4 @@
-import { normalizeApplyUrl } from './sources.mts';
+import { normalizeApplyUrl, validateApplyUrl } from './sources.mts';
 
 export type SavedJob = {
   key: string; source: string; originalId: string; title: string;
@@ -39,7 +39,8 @@ export function duplicateLinks(post: {content?: {raw?: string; rendered?: string
   return links;
 }
 export function renderDraft(job: SavedJob) {
-  const apply = applicationLink(job);
+  // Keep the actual clickable URL byte-for-byte, including any signed query string.
+  const apply = validateApplyUrl(job.applyUrl ?? job.apply_url);
   const term = COUNTRY_TERMS[job.country];
   if (!apply || !term || !job.sourceUrl || !job.originalId ||
     !job.arabic_title?.trim() || !job.arabic_description?.trim()) {
@@ -48,7 +49,7 @@ export function renderDraft(job: SavedJob) {
   const paragraph = (value:string) => '<p>' + escapeHTML(value).replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
   const requirements = job.arabic_requirements?.trim()
     ? '<h2>المتطلبات</h2>' + paragraph(job.arabic_requirements) : '';
-  const sourceLink = normalizeApplyUrl(job.sourceUrl);
+  const sourceLink = validateApplyUrl(job.sourceUrl);
   if (!sourceLink) throw Error('Invalid original source URL');
   const sourceDetails = '<p><strong>المصدر:</strong> ' + escapeHTML(job.source) +
     '<br><strong>معرّف الإعلان:</strong> ' + escapeHTML(job.originalId) + '</p>';
