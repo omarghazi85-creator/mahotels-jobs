@@ -17,6 +17,7 @@
   },
   "include": [
     "netlify/functions/**/*.mts",
-    "netlify/functions/**/*.d.ts"
+    "netlify/functions/**/*.d.ts",
+    "src/**/*.mts"
   ]
 }
