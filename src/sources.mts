@@ -43,17 +43,26 @@ export function normalizeCountry(value: unknown): string | undefined {
   for (const v of countries.values()) if (v.toLowerCase() === s) return v;
   return;
 }
-export function normalizeApplyUrl(value: unknown): string | undefined {
+// Preserve provider query strings, signatures and parameter ordering for actual candidates.
+export function validateApplyUrl(value: unknown): string | undefined {
   if (!allowed(value)) return;
   try {
-    const u = new URL(value);
-    if (u.protocol !== 'https:' || u.username || u.password) return;
-    u.hash = '';
-    for (const k of [...u.searchParams.keys()])
-      if (/^(utm_.+|oga|ref|source|tracking)$/i.test(k)) u.searchParams.delete(k);
-    u.searchParams.sort();
-    return u.toString().replace(/\/$/, '');
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password) return;
+    return value;
   } catch { return; }
+}
+// For duplicate matching ONLY. Never substitute this canonical form for an application link.
+export function normalizeApplyUrl(value: unknown): string | undefined {
+  const raw = validateApplyUrl(value);
+  if (!raw) return;
+  const url = new URL(raw);
+  url.hash = '';
+  for (const key of [...url.searchParams.keys()]) {
+    if (/^(utm_.+|oga)$/i.test(key)) url.searchParams.delete(key);
+  }
+  url.searchParams.sort();
+  return url.toString().replace(/\/$/, '');
 }
 async function smartRecruiters(companyId: 'AccorHotel' | 'RHG', source: 'accor' | 'radisson', limit: number): Promise<Vacancy[]> {
   const data = await load('https://api.smartrecruiters.com/v1/companies/' + companyId + '/postings?limit=100');
@@ -78,7 +87,7 @@ async function smartRecruiters(companyId: 'AccorHotel' | 'RHG', source: 'accor' 
       const sections = detail.jobAd?.sections ?? {};
       const description = clean(sections.jobDescription?.text ?? sections.companyDescription?.text);
       const requirements = clean(sections.qualifications?.text);
-      const applyUrl = normalizeApplyUrl(detail.applyUrl ?? detail.ref ?? sourceUrl);
+      const applyUrl = validateApplyUrl(detail.applyUrl ?? detail.ref ?? sourceUrl);
       if (!description || !applyUrl) continue;
       vacancies.push({
         source, originalId: id, title, company: companyId, city, country,
@@ -106,7 +115,7 @@ export async function collectRotana(limit = 10): Promise<Vacancy[]> {
     const title = text(raw?.title);
     const city = text(raw?.city ?? raw?.location?.city);
     const country = normalizeCountry(raw?.country ?? raw?.location?.country_code ?? raw?.location?.country);
-    const applyUrl = normalizeApplyUrl(raw?.application_url ?? raw?.url);
+    const applyUrl = validateApplyUrl(raw?.application_url ?? raw?.url);
     const sourceUrl = text(raw?.url);
     const description = clean(raw?.description);
     if (!id || !title || !city || !country || !applyUrl || !allowed(sourceUrl) || !description) continue;
