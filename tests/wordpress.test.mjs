@@ -42,3 +42,11 @@ test('verified source posting/expiry dates are included, missing dates are not i
   const undated = renderDraft({...sample, postedAt:undefined,expiresAt:undefined});
   assert.doesNotMatch(undated.content, /تاريخ الإعلان|تاريخ انتهاء التقديم/);
 });
+
+test('draft uses untouched signed application URL while dedup canonicalizes trackers', () => {
+  const original='https://careers.example.org/apply?ref=JOB-1&signature=abc%2Bdef&utm_source=partner';
+  const job={...sample,applyUrl:original};
+  const markup=renderDraft(job).content;
+  assert.ok(markup.includes('ref=JOB-1&amp;signature=abc%2Bdef&amp;utm_source=partner'));
+  assert.ok(duplicateLinks({content:{raw:markup}}).has('https://careers.example.org/apply?ref=JOB-1&signature=abc%2Bdef'));
+});
