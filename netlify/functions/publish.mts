@@ -99,7 +99,7 @@ export default async (request: Request) => {
   // One manual test draft per invocation. No retries of ambiguous writes.
   for await (const page of store.list({paginate:true})) {
     for (const {key} of page.blobs) {
-      const entry = await store.getWithMetadata(key, {type:'json'});
+      const entry = await store.getWithMetadata(key, {type:'json', consistency:'strong'});
       if (!entry?.data) continue;
       const job = entry.data as SavedJob;
       if (job.state !== 'ready' || key !== job.key ||
@@ -111,10 +111,20 @@ export default async (request: Request) => {
       const slug = jobSlug(job);
       try {
         const bySlug = await inspectBySlug(endpoint, slug, headers);
-        if (bySlug.length || existing.has(apply) || existing.has(job.sourceUrl)) {
+        if (bySlug.length || existing.has(apply) || (job.sourceUrl && existing.has(new URL(job.sourceUrl).toString().replace(/\/$/, '')))) {
           console.log('Duplicate job suppressed',job.source,job.originalId);
           // Preserve ready state until manually reconciled with the existing post.
           continue;
+        }
+        // Atomically reserve the ONE test draft allowed across every invocation and deploy.
+        // Never silently release this lock after an ambiguous WordPress write.
+        const testClaims = getStore('mahotels-jobs-one-draft-claim-v1');
+        const testClaim = await testClaims.setJSON('first-ever-test-draft', {
+          key, slug, reserved_at:new Date().toISOString(), state:'reserved'
+        }, {onlyIfNew:true});
+        if (!testClaim.modified) {
+          console.log('One-draft test budget already reserved; no more WP writes');
+          return new Response('One test draft already attempted', {status:409});
         }
         // Mark as in-flight with a conditional write, protecting against parallel executions.
         // A network timeout after WP creation leaves this state for manual reconciliation.
