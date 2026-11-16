@@ -39,8 +39,8 @@ try {
   const example = 'https://careers.marriott.com/saudi-arabia-voyage-program-march-2027-revenue-management/job/P1-7341523-0';
   const r = await fetch(example, {signal:AbortSignal.timeout(12000)});
   const html = r.ok ? await r.text() : '';
-  const scripts = [...html.matchAll(/<script\\b([^>]+)>([\\s\\S]*?)<\\/script>/gi)];
-  const ldScripts = scripts.filter(m=>/ld\\+json/i.test(m[1]));
+  const scripts = html.match(/<script[^>]*>/gi) ?? [];
+  const ldScripts = scripts.filter(m=>m.includes('ld+json'));
   const { parseMarriottJob } = await import('../src/marriott.mts');
   const parsed = parseMarriottJob(html, example);
   console.log(JSON.stringify({source:'marriott-single',status:r.status,htmlLength:html.length,
