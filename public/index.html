@@ -22,6 +22,7 @@ section.info{padding:55px 0 75px}h2{margin:0 0 16px;font-size:28px}p{margin:0 0 
 .status strong{font-size:18px}.status p{color:var(--muted);font-size:14px;margin:5px 0 0}
 footer{border-top:1px solid var(--line);padding:27px 0;color:var(--muted);font-size:14px}
 @media(max-width:720px){main{padding:50px 0 60px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:32px}.source{padding:15px;min-height:100px}nav{min-height:68px}h1{letter-spacing:-.5px}}
+.listings{padding:66px 0 60px;background:#fff}.lede2{max-width:750px;color:var(--muted);margin-bottom:25px}.searchline{display:grid;gap:8px;max-width:520px;margin-bottom:23px}.searchline label{font-weight:750;font-size:14px}.searchline input{font:inherit;color:var(--ink);border:1px solid #b6cccc;border-radius:10px;padding:12px 15px;min-width:0}.searchline input:focus-visible{outline:3px solid #b2d6d8}.job-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.job{border:1px solid var(--line);border-radius:14px;padding:23px;background:#fff}.job h3{font-size:20px;line-height:1.5;margin:0 0 8px}.job p{color:var(--muted);font-size:14px;margin-bottom:16px}.job time{font-size:13px;color:var(--muted);display:block;margin-bottom:8px}.job a{color:var(--teal);font-weight:750;text-underline-offset:4px}.snapshot{color:var(--muted);font-size:13px;margin-top:15px}@media(max-width:720px){.job-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -30,13 +31,20 @@ footer{border-top:1px solid var(--line);padding:27px 0;color:var(--muted);font-s
 <span class="kicker">بوابة الوظائف الفندقية</span>
 <h1>فرص العمل في قطاع الضيافة، من مصادرها الأصلية</h1>
 <p class="lede">نعمل على جمع الوظائف الفندقية من جهات التوظيف الرسمية وتقديم بياناتها باللغة العربية، مع الحفاظ على رابط التقديم الأصلي لكل فرصة.</p>
-<div class="actions"><a class="btn" href="https://mahotels.net/" rel="noopener">تصفح موقع MAHotels</a><button class="btn alt" id="check" type="button">فحص حالة المحرك</button></div>
+<div class="actions"><a class="btn" href="#jobs">عرض الوظائف المنشورة</a><a class="btn alt" href="https://mahotels.net/" rel="noopener">موقع MAHotels</a><button class="btn alt" id="check" type="button">فحص حالة المحرك</button></div>
 <div class="grid" aria-label="مصادر التوظيف">
 <div class="source"><strong>Accor</strong><span>مصدر توظيف رسمي</span></div>
 <div class="source"><strong>Radisson</strong><span>مصدر توظيف رسمي</span></div>
 <div class="source"><strong>Rotana</strong><span>مصدر توظيف رسمي</span></div>
 <div class="source"><strong>Marriott</strong><span>مصدر توظيف رسمي</span></div>
 </div></div></main>
+<section class="listings" id="jobs"><div class="wrap">
+<h2>أحدث الوظائف المنشورة في MAHotels</h2>
+<p class="lede2">هذه عينة من الوظائف المنشورة على الموقع الرئيسي عند آخر مراجعة، وليست تأكيدًا باستمرار فتح باب التقديم. تحقق من حالة الإعلان في مصدره الأصلي قبل التقدم.</p>
+<div class="searchline"><label for="job-query">ابحث في العناوين والملخصات</label><input id="job-query" type="search" placeholder="المسمى الوظيفي أو المدينة أو الفندق" autocomplete="off"></div>
+<div id="job-grid" class="job-grid" aria-live="polite"><p>جارٍ تحميل الوظائف المنشورة...</p></div>
+<p class="snapshot" id="snapshot"></p>
+</div></section>
 <section class="info"><div class="wrap"><h2>حالة الخدمة</h2>
 <div class="status" role="status" aria-live="polite"><strong id="state">لم يُفحص التشغيل بعد</strong><p id="detail">اضغط «فحص حالة المحرك» للتحقق من حالة الخدمة مباشرة. لا يُفعّل هذا الزر الجلب أو النشر.</p></div>
 <p style="margin-top:22px;color:var(--muted);max-width:770px">تظل الوظائف المنشورة في موقع MAHotels الرئيسي متاحة، ويُشغّل محرك جمع الوظائف الجديد بعد استكمال فحوصات الأمان وجودة البيانات.</p>
@@ -44,6 +52,41 @@ footer{border-top:1px solid var(--line);padding:27px 0;color:var(--muted);font-s
 <footer><div class="wrap">MAHotels Jobs · جزء من منظومة MAHotels</div></footer>
 <script>
 "use strict";
+const jobGrid=document.getElementById('job-grid');
+const query=document.getElementById('job-query');
+const snapshot=document.getElementById('snapshot');
+let published=[];
+function renderJobs(){
+  const q=query.value.trim().toLocaleLowerCase('ar');
+  const found=published.filter(x=>(x.title+' '+x.summary).toLocaleLowerCase('ar').includes(q));
+  jobGrid.replaceChildren();
+  if(!found.length){const p=document.createElement('p');p.textContent='لا توجد وظائف مطابقة في هذه العينة. يمكنك تصفح الموقع الرئيسي للمزيد.';jobGrid.appendChild(p);return;}
+  for(const job of found){
+    const card=document.createElement('article');card.className='job';
+    const date=document.createElement('time');date.dateTime=job.date;date.textContent='نُشر في '+job.date;
+    const heading=document.createElement('h3');heading.textContent=job.title;
+    const summary=document.createElement('p');summary.textContent=job.summary;
+    const a=document.createElement('a');a.href=job.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent='قراءة الوظيفة في MAHotels';
+    card.append(date,heading,summary,a);jobGrid.appendChild(card);
+  }
+}
+query.addEventListener('input',renderJobs);
+(async()=>{
+ try{
+  const response=await fetch('./jobs-snapshot.json',{cache:'no-cache'});
+  if(!response.ok)throw Error('No job snapshot');
+  const payload=await response.json();
+  if(!Array.isArray(payload.jobs))throw Error('Invalid job snapshot');
+  published=payload.jobs.filter(j=>typeof j.title==='string'&&typeof j.summary==='string'&&typeof j.date==='string'&&typeof j.url==='string'&&j.url.startsWith('https://mahotels.net/hotel-job/'));
+  snapshot.textContent='آخر مراجعة للبيانات: '+String(payload.checked_at||'غير محدد')+' · '+published.length+' وظائف معروضة';
+  renderJobs();
+ }catch{
+  jobGrid.replaceChildren();
+  const p=document.createElement('p');p.textContent='تعذّر تحميل عينة الوظائف. الوظائف المنشورة متاحة على موقع MAHotels الرئيسي.';
+  const a=document.createElement('a');a.href='https://mahotels.net/';a.textContent='الانتقال إلى MAHotels';a.rel='noopener';
+  jobGrid.append(p,a);
+ }
+})();
 const button=document.getElementById('check');
 const label=document.getElementById('state');
 const detail=document.getElementById('detail');
