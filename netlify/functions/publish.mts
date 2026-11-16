@@ -70,6 +70,22 @@ export default async (request: Request) => {
     !username || !appPassword) return new Response('Missing WordPress configuration', {status:503});
   const endpoint = new URL('/wp-json/wp/v2/' + restBase, site);
   const headers = { Authorization:'Basic ' + btoa(username + ':' + appPassword), Accept:'application/json' };
+  // The custom post type slug is not necessarily its REST base. Verify live WP registration.
+  try {
+    const typeResponse = await fetchJSON(new URL('/wp-json/wp/v2/types/ma_hotel_job?context=edit',site), headers);
+    const type = await typeResponse.json() as {rest_base?: string; taxonomies?: string[]};
+    if (type.rest_base !== restBase || !type.taxonomies?.includes('ma_job_country')) {
+      throw Error('WordPress REST base or country taxonomy does not match');
+    }
+    const optionsResponse = await fetchJSON(endpoint, headers, {method:'OPTIONS'});
+    const options = await optionsResponse.json() as {schema?:{properties?:Record<string,unknown>}};
+    if (!options.schema?.properties?.ma_job_country) {
+      throw Error('Country taxonomy is not writable through job REST schema');
+    }
+  } catch (error) {
+    console.error('WordPress schema preflight failed closed', String(error));
+    return new Response('WordPress schema unverified', {status:503});
+  }
   let existing: Set<string>;
   try {
     const audit = await auditAll(endpoint, headers);
