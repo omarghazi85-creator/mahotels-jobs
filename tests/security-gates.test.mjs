@@ -106,6 +106,37 @@ test('collector refuses GET even with an authorized dispatch token', async () =>
   assert.equal(response,undefined);
   // The mocked fetch would throw if any upstream work was attempted.
 });
+
+test('health refuses false-ready status when switches enabled but credentials missing', async () => {
+  vars.clear();
+  vars.set('JOBS_EMERGENCY_STOP','false');
+  vars.set('ENABLE_COLLECTION','true');
+  vars.set('ENABLE_WP_SYNC','true');
+  vars.set('WP_DRAFT_ONLY','true');
+  vars.set('WP_JOB_SCHEMA_VERIFIED','true');
+  vars.set('WP_SITE_URL','https://mahotels.net');
+  vars.set('WP_JOB_REST_BASE','ma_hotel_job');
+  const response=await health(new Request('https://example.org/.netlify/functions/health'));
+  const payload=await response.json();
+  assert.equal(payload.collection,'disabled');
+  assert.equal(payload.wordpress_sync,'disabled');
+  assert.ok(!JSON.stringify(payload).includes('INTERNAL_DISPATCH_TOKEN'));
+});
+test('health reports controls as enabled only with all required credentials present', async () => {
+  vars.clear();
+  for (const [key,value] of Object.entries({
+    JOBS_EMERGENCY_STOP:'false', ENABLE_COLLECTION:'true', ENABLE_WP_SYNC:'true',
+    WP_DRAFT_ONLY:'true',WP_JOB_SCHEMA_VERIFIED:'true',WP_SITE_URL:'https://mahotels.net',
+    WP_JOB_REST_BASE:'ma_hotel_job',GROQ_API_KEY:'fake-test-key',
+    INTERNAL_DISPATCH_TOKEN:'x'.repeat(64), WP_USERNAME:'test-user',WP_APP_PASSWORD:'test-only-app-password'
+  })) vars.set(key,value);
+  const response=await health(new Request('https://example.org/.netlify/functions/health'));
+  const payload=await response.json();
+  assert.equal(payload.collection,'enabled');
+  assert.equal(payload.wordpress_sync,'enabled');
+  assert.ok(!JSON.stringify(payload).includes('test-only-app-password'));
+  vars.clear();
+});
 test.after(()=>{
   globalThis.fetch=savedFetch;
   if (savedNetlify === undefined) delete globalThis.Netlify;
