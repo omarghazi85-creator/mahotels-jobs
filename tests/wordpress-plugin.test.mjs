@@ -31,3 +31,15 @@ test('safe independent preview is admin-only and keeps the legacy shortcode in c
   assert.match(plugin,/if \(shortcode_exists\('ma_hotels_jobs'\)\)/);
   assert.match(plugin,/return '';/);
 });
+
+test('lite keeps the four legacy filters and uses bounded core WordPress queries',()=>{
+  for (const param of ['mhj_city','mhj_job','mhj_month','mhj_year','mhj_country']) {
+    assert.ok(plugin.includes(param),param+' filter missing');
+  }
+  assert.match(plugin,/array\('per_page'\s*=>\s*20\)/);
+  assert.match(plugin,/\$args\['date_query'\]/);
+  assert.match(plugin,/\$date_clause\['month'\]/);
+  assert.match(plugin,/\$date_clause\['year'\]/);
+  assert.match(plugin,/sanitize_text_field\(wp_unslash/);
+  assert.match(plugin,/'s'\s*=>\s*trim\(\$city/);
+});
