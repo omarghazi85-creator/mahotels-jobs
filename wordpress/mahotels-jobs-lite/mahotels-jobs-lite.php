@@ -124,7 +124,7 @@ function mah_jobs_lite_shortcode($atts = array()) {
 
     if ($month || $year) {
         $date_clause = array('inclusive' => true);
-        if ($month) { $date_clause['monthnum'] = $month; }
+        if ($month) { $date_clause['month'] = $month; }
         if ($year) { $date_clause['year'] = $year; }
         $args['date_query'] = array($date_clause);
     }
