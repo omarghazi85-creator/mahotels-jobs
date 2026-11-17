@@ -51,7 +51,12 @@ job details, application links, and posts against the current production
 view. When the new Netlify collector and the lightweight WordPress plugin
 both pass end-to-end tests: take a backup, switch plugin control in a small
 reversible window, confirm all old posts and URLs remain visible, and only
-then deactivate/uninstall the old plugin. Never delete its job posts or terms.
+then deactivate the old plugin and verify that no links, job posts or terms
+are missing. **Before uninstalling the old plugin**, inspect its uninstall
+hooks or `uninstall.php` for data-deletion behavior, take a restorable backup,
+and confirm that removing it will not delete existing jobs, taxonomies,
+options needed for rollback, or shared content. Only uninstall after this
+separate data-retention safety check.
 
 ### Existing credentials in the old WordPress plugin
 
