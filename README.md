@@ -36,6 +36,12 @@ The current Netlify environment has `JOBS_EMERGENCY_STOP=true`,
 ### Installable lightweight replacement plugin
 
 Source: `wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php`.
+
+For coexistence QA, the Lite plugin registers the admin-only shortcode
+`[ma_hotels_jobs_lite_preview]`. It is **empty for visitors** and lets an
+administrator inspect the new job cards on a draft preview page without
+replacing the existing `[ma_hotels_jobs]` page. Do not publicly publish the
+preview page. This is an inspection tool, not an automation or writer.
 The GitHub Actions workflow validates PHP syntax and publishes an **installable
 ZIP artifact** named `mah-jobs-lite-installable-zip`.
 
