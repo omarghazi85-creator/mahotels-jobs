@@ -43,6 +43,10 @@ const digest = async (value: string) => Array.from(
 ).map(x => x.toString(16).padStart(2, '0')).join('');
 
 export default async (request: Request) => {
+  if (request.method !== 'POST') {
+    console.error('Collection requires POST');
+    return;
+  }
   const token = env('INTERNAL_DISPATCH_TOKEN');
   const provided = request.headers.get('x-mahotels-dispatch-token') ?? '';
   if (!token || token.length < 32 || !provided || provided !== token) {
