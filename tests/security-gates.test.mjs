@@ -92,6 +92,20 @@ test('WP duplicate audit stops rather than proceeding with incomplete or malform
   try {await assert.rejects(auditAll(endpoint,{}),/Audit content missing/)}
   finally {globalThis.fetch=forbiddenFetch}
 });
+
+test('collector refuses GET even with an authorized dispatch token', async () => {
+  vars.clear();
+  const credential='m'.repeat(64);
+  vars.set('JOBS_EMERGENCY_STOP','false');
+  vars.set('ENABLE_COLLECTION','true');
+  vars.set('GROQ_API_KEY','fake-for-test-only');
+  vars.set('INTERNAL_DISPATCH_TOKEN',credential);
+  const response=await collect(new Request('https://example.org/.netlify/functions/collect',{
+    headers:{'x-mahotels-dispatch-token':credential}
+  }));
+  assert.equal(response,undefined);
+  // The mocked fetch would throw if any upstream work was attempted.
+});
 test.after(()=>{
   globalThis.fetch=savedFetch;
   if (savedNetlify === undefined) delete globalThis.Netlify;
