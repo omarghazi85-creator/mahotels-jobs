@@ -5,11 +5,14 @@ A separately deployed Netlify job-collection service for **https://mahotels.net/
 ## Preservation rule
 
 The existing **MA Hotels Jobs** WordPress plugin (version 0.7.0 at last verified
-read-only inspection) **must remain installed, active, and unchanged**. It owns
+read-only inspection) **must remain installed, active, and unchanged during
+migration/testing**. After acceptance the user explicitly intends to retire and
+remove it, replacing all plugin duties with a lightweight WordPress display/
+REST bridge and the external Netlify collector. The old plugin owns
 the live job listing post type `ma_hotel_job` and country taxonomy
-`ma_job_country`. The new Netlify code is a replacement for the expensive
-collection/translation workload, **not a replacement for the site's currently
-working job display, links, or published records**.
+`ma_job_country`. The new Netlify service replaces the expensive collection/translation work;
+**MAHotels Jobs Lite** replaces the old plugin's display and REST registration
+while preserving existing job posts, term IDs, page shortcode and job permalinks.
 
 Never copy plugin option values, API keys, WordPress application passwords, or
 private tokens into this public repository, Actions logs, or issue/PR comments.
@@ -29,6 +32,26 @@ The current Netlify environment has `JOBS_EMERGENCY_STOP=true`,
 `ENABLE_COLLECTION=false`, `ENABLE_WP_SYNC=false`,
 `WP_JOB_SCHEMA_VERIFIED=false`, `WP_DRAFT_ONLY=true`, and
 `MAX_JOBS_PER_DAY=2` already set and independently read back.
+
+### Installable lightweight replacement plugin
+
+Source: `wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php`.
+The GitHub Actions workflow validates PHP syntax and publishes an **installable
+ZIP artifact** named `mah-jobs-lite-installable-zip`.
+
+The existing `/hotel-jobs` page (WordPress page ID 44129) uses
+`[ma_hotels_jobs]`. The lightweight replacement retains this exact shortcode
+and the existing `ma_hotel_job` post type, `ma_job_country` taxonomy,
+`/hotel-job/...` detail URLs, and WordPress REST API registration. It adds
+no WordPress cron, external API calls, translations or expensive post import.
+
+**Do not uninstall the old plugin yet.** Install/verify the new plugin in a
+safe staging environment; compare the shortcode page, country filters,
+job details, application links, and posts against the current production
+view. When the new Netlify collector and the lightweight WordPress plugin
+both pass end-to-end tests: take a backup, switch plugin control in a small
+reversible window, confirm all old posts and URLs remain visible, and only
+then deactivate/uninstall the old plugin. Never delete its job posts or terms.
 
 ### Existing credentials in the old WordPress plugin
 
@@ -63,7 +86,8 @@ endpoint or install an unauthenticated endpoint to reveal them.
    country term, canonical-source duplicate check, original **unmodified**
    application URL and resulting plugin display.
 6. Confirm that any old collector's scheduling cannot race with the new
-   collector, without deactivating or modifying the old display plugin.
+   collector. After validation switch the **display plugin** to MAHotels Jobs
+   Lite and retire the legacy plugin without deleting its job data.
 7. Turn on the schedule only after those checks and retain the maximum of
    **two translation attempts per UTC day**.
 
