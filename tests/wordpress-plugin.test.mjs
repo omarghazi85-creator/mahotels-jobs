@@ -7,6 +7,7 @@ const plugin=readFileSync(new URL('../wordpress/mahotels-jobs-lite/mahotels-jobs
 test('replacement keeps legacy post type, URL prefix and taxonomy identifiers',()=>{
   assert.match(plugin,/register_post_type\('ma_hotel_job'/);
   assert.match(plugin,/'slug'\s*=>\s*'hotel-job'/);
+  assert.match(plugin,/'slug'\s*=>\s*'hotel-jobs\/country'/);
   assert.match(plugin,/register_taxonomy\('ma_job_country'/);
   assert.match(plugin,/'rest_base'\s*=>\s*'ma_hotel_job'/);
   assert.match(plugin,/'rest_base'\s*=>\s*'ma_job_country'/);
