@@ -127,3 +127,32 @@ WordPress. The CI workflow runs these checks automatically on the work branch.
 Accor and Radisson: SmartRecruiters; Rotana: Workable; Marriott: official
 career pages. No invented vacancies, expiry dates, salary or requirements.
 Countries are restricted to the existing WordPress country terms.
+
+
+## Verified WordPress coexistence — 17 November 2026
+
+**The Lite plugin is now actually INSTALLED AND ACTIVE on production WordPress, in
+parallel with the legacy plugin; this is NOT the final cutover.**
+
+- Lite plugin current version: `0.1.3` (installed and updated directly via
+  WordPress.com Jetpack plugin upload; connector reports active).
+- Legacy plugin current version: `0.7.0` (still active, not modified).
+- Existing public jobs Page ID `44129` unchanged: `[ma_hotels_jobs]`.
+- Administrator-only preview Page ID `45244`: status `draft`,
+  `[ma_hotels_jobs_lite_preview]` (not published).
+- `ma_hotel_job` published posts after update: **568**. Country taxonomy:
+  **8** original terms remain.
+- Lite now supports country, city, job text, publication month and year inputs,
+  and 20 jobs/page using native WP_Query. City/job text search is a native
+  full-text search, so its semantics have **not** been established as identical
+  to the old plugin's metadata-based filters.
+- Github Actions run `44072756776`: **31/31 tests**, PHP syntax, source smoke
+  4/4 and installable ZIP packaging all pass.
+
+**Next gates before retiring legacy:** authenticated visual preview with active
+theme; original job URL & country archive parity, expiry handling parity,
+Netlify deployment, secure credentials migration, authenticated WP creation
+of exactly one draft, rollback backup and legacy uninstall-hook review.
+
+The legacy job plugin **must not be deactivated or uninstalled** before all
+these checks pass. Old jobs and country terms must never be deleted.
