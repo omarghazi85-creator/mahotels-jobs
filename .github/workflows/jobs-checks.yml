@@ -19,6 +19,13 @@ jobs:
           node-version: '22'
       - name: Install dependencies (no lifecycle scripts)
         run: npm install --ignore-scripts --no-audit --no-fund
+      - name: PHP syntax check for replacement WordPress plugin
+        run: php -l wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php
+      - name: Package installable replacement plugin ZIP
+        run: |
+          mkdir -p dist
+          cd wordpress
+          zip -qr ../dist/mahotels-jobs-lite.zip mahotels-jobs-lite
       - name: TypeScript check
         run: npm run build
       - name: Bundle three Netlify functions
@@ -33,3 +40,10 @@ jobs:
         run: node tests/diagnose-wordpress-public.mjs
       - name: Read-only recruitment source smoke test
         run: node --experimental-strip-types tests/live-smoke.mjs
+      - name: Upload WordPress replacement plugin installer
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mah-jobs-lite-installable-zip
+          path: dist/mahotels-jobs-lite.zip
+          retention-days: 30
