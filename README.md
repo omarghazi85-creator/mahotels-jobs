@@ -42,13 +42,17 @@ ZIP artifact** named `mah-jobs-lite-installable-zip`.
 The existing `/hotel-jobs` page (WordPress page ID 44129) uses
 `[ma_hotels_jobs]`. The lightweight replacement retains this exact shortcode
 and the existing `ma_hotel_job` post type, `ma_job_country` taxonomy,
-`/hotel-job/...` detail URLs, and WordPress REST API registration. It adds
+`/hotel-job/...` detail URLs, original indexed country routes
+`/hotel-jobs/country/<country-slug>`, and WordPress REST API registration. It adds
 no WordPress cron, external API calls, translations or expensive post import.
 
 **Do not uninstall the old plugin yet.** Install/verify the new plugin in a
 safe staging environment; compare the shortcode page, country filters,
 job details, application links, and posts against the current production
-view. When the new Netlify collector and the lightweight WordPress plugin
+view. **Expiry control is a separate acceptance check:** the old plugin advertises
+expiry control; Jetpack has not exposed the plugin's private expiry metadata,
+so do not assume the lightweight renderer already reproduces that behavior.
+Identify and test the original expiry rules before removing the old plugin. When the new Netlify collector and the lightweight WordPress plugin
 both pass end-to-end tests: take a backup, switch plugin control in a small
 reversible window, confirm all old posts and URLs remain visible, and only
 then deactivate the old plugin and verify that no links, job posts or terms
