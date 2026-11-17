@@ -24,3 +24,10 @@ test('lightweight plugin does not schedule collection, call external providers o
     assert.equal(plugin.includes(method),false,method+' is forbidden in the lightweight bridge');
   }
 });
+
+test('safe independent preview is admin-only and keeps the legacy shortcode in charge',()=>{
+  assert.match(plugin,/add_shortcode\('ma_hotels_jobs_lite_preview'/);
+  assert.match(plugin,/current_user_can\('manage_options'\)/);
+  assert.match(plugin,/if \(shortcode_exists\('ma_hotels_jobs'\)\)/);
+  assert.match(plugin,/return '';/);
+});
