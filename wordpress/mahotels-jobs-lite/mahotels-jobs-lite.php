@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAHotels Jobs Lite
  * Description: Lightweight job display and WordPress REST bridge. Recruitment, translation and scheduling run outside WordPress.
- * Version: 0.1.1
+ * Version: 0.1.2
  * Author: MAHotels
  * Text Domain: mah-jobs-lite
  * Requires PHP: 7.4
@@ -60,6 +60,18 @@ add_action('init', function () {
         return;
     }
     add_shortcode('ma_hotels_jobs', 'mah_jobs_lite_shortcode');
+}, 999);
+
+// Independent, administrator-only preview while the legacy shortcode owns
+// the live page. Never expose unpublished jobs or change the existing shortcode.
+add_action('init', function () {
+    add_shortcode('ma_hotels_jobs_lite_preview', function ($atts = array()) {
+        if (!current_user_can('manage_options')) {
+            return '';
+        }
+        return '<div class="mah-jobs-lite-preview"><p><strong>معاينة إدارية لإضافة MAHotels Jobs Lite</strong></p>'
+            . mah_jobs_lite_shortcode($atts) . '</div>';
+    });
 }, 999);
 
 function mah_jobs_lite_shortcode($atts = array()) {
