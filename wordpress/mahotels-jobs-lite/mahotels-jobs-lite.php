@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAHotels Jobs Lite
  * Description: Lightweight job display and WordPress REST bridge. Recruitment, translation and scheduling run outside WordPress.
- * Version: 0.1.2
+ * Version: 0.1.3
  * Author: MAHotels
  * Text Domain: mah-jobs-lite
  * Requires PHP: 7.4
@@ -75,10 +75,18 @@ add_action('init', function () {
 }, 999);
 
 function mah_jobs_lite_shortcode($atts = array()) {
-    $atts = shortcode_atts(array('per_page' => 12), (array) $atts, 'ma_hotels_jobs');
+    $atts = shortcode_atts(array('per_page' => 20), (array) $atts, 'ma_hotels_jobs');
     $per_page = min(24, max(1, absint($atts['per_page'])));
     $page = isset($_GET['mhj_page']) ? max(1, absint(wp_unslash($_GET['mhj_page']))) : 1;
     $country = isset($_GET['mhj_country']) ? absint(wp_unslash($_GET['mhj_country'])) : 0;
+    $city = isset($_GET['mhj_city']) && is_string($_GET['mhj_city'])
+        ? sanitize_text_field(wp_unslash($_GET['mhj_city'])) : '';
+    $job_title = isset($_GET['mhj_job']) && is_string($_GET['mhj_job'])
+        ? sanitize_text_field(wp_unslash($_GET['mhj_job'])) : '';
+    $month = isset($_GET['mhj_month']) ? absint(wp_unslash($_GET['mhj_month'])) : 0;
+    $year = isset($_GET['mhj_year']) ? absint(wp_unslash($_GET['mhj_year'])) : 0;
+    $month = ($month >= 1 && $month <= 12) ? $month : 0;
+    $year = ($year >= 2015 && $year <= (int) gmdate('Y') + 1) ? $year : 0;
 
     $terms = get_terms(array('taxonomy' => 'ma_job_country', 'hide_empty' => true));
     if (is_wp_error($terms)) {
@@ -101,6 +109,9 @@ function mah_jobs_lite_shortcode($atts = array()) {
         'order' => 'DESC',
         'no_found_rows' => false,
         'ignore_sticky_posts' => true,
+        // Search uses WordPress's built-in indexed post search, not slow custom
+        // meta scans. It matches title and city text across title/body.
+        's' => trim($city . ' ' . $job_title),
     );
     if ($country) {
         $args['tax_query'] = array(array(
@@ -111,6 +122,12 @@ function mah_jobs_lite_shortcode($atts = array()) {
         ));
     }
 
+    if ($month || $year) {
+        $date_clause = array('inclusive' => true);
+        if ($month) { $date_clause['monthnum'] = $month; }
+        if ($year) { $date_clause['year'] = $year; }
+        $args['date_query'] = array($date_clause);
+    }
     $jobs = new WP_Query($args);
     ob_start();
     ?>
@@ -119,7 +136,7 @@ function mah_jobs_lite_shortcode($atts = array()) {
         .mah-jobs-lite{font-family:inherit;color:#213a41}
         .mah-jobs-lite__filters{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:0 0 24px}
         .mah-jobs-lite__filters label{font-weight:600}
-        .mah-jobs-lite__filters select{min-width:180px;padding:10px;background:#fff;border:1px solid #cfdadc;border-radius:8px}
+        .mah-jobs-lite__filters select,.mah-jobs-lite__filters input{min-width:120px;max-width:210px;padding:10px;background:#fff;border:1px solid #cfdadc;border-radius:8px}
         .mah-jobs-lite__filters button{background:#116874;color:#fff;border:0;border-radius:8px;padding:10px 22px;cursor:pointer}
         .mah-jobs-lite__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}
         .mah-jobs-lite__item{padding:22px;border:1px solid #e0e7e8;border-radius:13px;background:#fff}
@@ -140,7 +157,25 @@ function mah_jobs_lite_shortcode($atts = array()) {
                     </option>
                 <?php endforeach; ?>
             </select>
-            <button type="submit"><?php echo esc_html('عرض الوظائف'); ?></button>
+            <label for="mhj-city"><?php echo esc_html('المدينة'); ?></label>
+            <input id="mhj-city" name="mhj_city" type="search" maxlength="100" value="<?php echo esc_attr($city); ?>" />
+            <label for="mhj-job"><?php echo esc_html('الوظيفة'); ?></label>
+            <input id="mhj-job" name="mhj_job" type="search" maxlength="100" value="<?php echo esc_attr($job_title); ?>" />
+            <label for="mhj-month"><?php echo esc_html('شهر الإعلان'); ?></label>
+            <select id="mhj-month" name="mhj_month">
+                <option value="0"><?php echo esc_html('جميع الشهور'); ?></option>
+                <?php for ($i = 1; $i <= 12; $i++) : ?>
+                  <option value="<?php echo esc_attr((string) $i); ?>" <?php selected($month, $i); ?>><?php echo esc_html((string) $i); ?></option>
+                <?php endfor; ?>
+            </select>
+            <label for="mhj-year"><?php echo esc_html('سنة الإعلان'); ?></label>
+            <select id="mhj-year" name="mhj_year">
+                <option value="0"><?php echo esc_html('جميع السنوات'); ?></option>
+                <?php for ($i = (int) gmdate('Y'); $i >= 2015; $i--) : ?>
+                  <option value="<?php echo esc_attr((string) $i); ?>" <?php selected($year, $i); ?>><?php echo esc_html((string) $i); ?></option>
+                <?php endfor; ?>
+            </select>
+            <button type="submit"><?php echo esc_html('عرض النتائج'); ?></button>
         </form>
         <div class="mah-jobs-lite__grid">
         <?php if ($jobs->have_posts()) : ?>
