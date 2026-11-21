@@ -8,6 +8,7 @@
  * Requires PHP: 7.4
  */
 defined('ABSPATH') || exit;
+require_once __DIR__ . '/draft-bridge.php';
 
 // SEO ownership remains with the legacy plugin while it is active.
 add_action('plugins_loaded', function () {
