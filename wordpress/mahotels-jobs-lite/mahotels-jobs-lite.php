@@ -23,9 +23,9 @@ function mah_jobs_lite_fields() {
 }
 
 /**
- * Authenticated conservative duplicate check for the historical metadata key.
+ * Authenticated conservative duplicate check using 0.7.0 metadata keys.
  * Only reports existence, never exports the stored links or job records.
- * Confirm the key against installed 0.7.0 before using in production.
+ * Search provider identity and URL, including trash as the old importer does.
  */
 add_action('rest_api_init', function () {
     register_rest_route('mahotels-jobs/v1', '/source-exists', array(
@@ -44,18 +44,28 @@ add_action('rest_api_init', function () {
                 isset($parts['user']) || isset($parts['pass'])) {
                 return new WP_Error('invalid_source_url', 'Invalid source URL.', array('status' => 400));
             }
+            $source = $request->get_param('source');
+            $original_id = $request->get_param('original_id');
+            $providers = array('accor' => array('AccorHotel', 'Accor'), 'radisson' => array('RHG'), 'marriott' => array('Marriott'), 'rotana' => array('Rotana'));
+            if (!is_string($source) || !isset($providers[$source]) || !is_string($original_id) ||
+                !preg_match('/^[A-Za-z0-9._-]{1,160}$/D', $original_id)) {
+                return new WP_Error('invalid_source_identity', 'Invalid source identity.', array('status' => 400));
+            }
+            $identities = array_map(function ($provider) use ($original_id) { return $provider . ':' . $original_id; }, $providers[$source]);
             global $wpdb;
             $wpdb->last_error = '';
             $ids = get_posts(array(
                 'post_type' => 'ma_hotel_job',
-                'post_status' => array('publish', 'draft', 'pending', 'private', 'future'),
+                'post_status' => array('publish', 'draft', 'pending', 'private', 'future', 'trash'),
                 'posts_per_page' => 1,
                 'fields' => 'ids',
                 'no_found_rows' => true,
                 'suppress_filters' => true,
                 'cache_results' => false,
-                'meta_key' => '_ma_job_source_url',
-                'meta_value' => $url,
+                'meta_query' => array('relation' => 'OR',
+                    array('key' => '_ma_job_source_url', 'value' => $url, 'compare' => '='),
+                    array('key' => '_ma_job_source_id', 'value' => $identities, 'compare' => 'IN'),
+                ),
             ));
             if ($wpdb->last_error !== '') {
                 return new WP_Error('lookup_failed', 'Source lookup unavailable.', array('status' => 503));
