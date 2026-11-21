@@ -173,4 +173,22 @@ assert_job($fields['ar_ready'] === '0' && $fields['verified_on'] === '', 'draft 
 assert_job(get_post_status($fresh) === 'draft', 'bridge does not publish');
 assert_job($bridge('POST', $fresh, $payload)->get_status() === 409, 'repeat write requires manual review');
 assert_job($bridge('POST', $active, $payload)->get_status() === 403, 'published item cannot be modified');
+
+// Exercise the same sequence as the engine against REST, not just wp_insert_post.
+$core_create = new WP_REST_Request('POST', '/wp/v2/ma_hotel_job');
+foreach (array('title'=>'وظيفة تجربة', 'content'=>'<p>وصف تجريبي</p>', 'status'=>'draft',
+    'slug'=>'ma-jobs-' . str_repeat('b', 32), 'ma_job_country'=>array((int)$term['term_id'])) as $key=>$value) {
+    $core_create->set_param($key, $value);
+}
+$created_response = rest_do_request($core_create);
+assert_job($created_response->get_status() === 201, 'core REST creates a job draft');
+$created_id = $created_response->get_data()['id'];
+assert_job($bridge('POST', $created_id, $payload)->get_status() === 200, 'private bridge populates core REST draft');
+$core_read = new WP_REST_Request('GET', '/wp/v2/ma_hotel_job/' . $created_id);
+$core_read->set_param('context', 'edit');
+$core_result = rest_do_request($core_read)->get_data();
+assert_job($core_result['status'] === 'draft' && in_array((int)$term['term_id'], $core_result['ma_job_country'], true), 'REST draft and taxonomy survive readback');
+$fields_result = $bridge('GET', $created_id)->get_data();
+assert_job($fields_result['fields']['source_url'] === $payload['source_url'] && $fields_result['fields']['ar_ready'] === '0' &&
+    $fields_result['fields']['verified_on'] === '', 'private readback confirms source and unverified state');
 echo "WordPress isolated integration passed\n";
