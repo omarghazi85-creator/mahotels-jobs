@@ -64,6 +64,25 @@ $response = rest_do_request($request);
 assert_job($response->get_status() === 200, 'admin REST read works');
 $rest_data = $response->get_data();
 assert_job(empty($rest_data['meta']['_ma_job_source_url']), 'legacy source metadata is not exposed in REST');
+$lookup = function ($url) {
+    $r = new WP_REST_Request('POST', '/mahotels-jobs/v1/source-exists');
+    $r->set_param('source_url', $url);
+    return rest_do_request($r);
+};
+$found = $lookup('https://example.com/apply?x=1&y=2');
+assert_job($found->get_status() === 200 && $found->get_data() === array('exists'=>true), 'authorized lookup finds existing source');
+$other = $lookup('https://example.com/apply?x=1&y=3');
+assert_job($other->get_status() === 200 && $other->get_data() === array('exists'=>false), 'different query remains distinct');
+$draft = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'draft', 'post_title'=>'مسودة'));
+update_post_meta($draft, '_ma_job_source_url', 'https://example.com/draft?id=10');
+assert_job($lookup('https://example.com/draft?id=10')->get_data() === array('exists'=>true), 'draft considered for duplicates');
+assert_job($lookup('javascript:alert(1)')->get_status() === 400, 'invalid scheme rejected');
+$subscriber = wp_create_user('unprivileged', 'fixture-password', 'subscriber@example.test');
+wp_set_current_user($subscriber);
+assert_job($lookup('https://example.com/apply?x=1&y=2')->get_status() === 403, 'subscriber denied');
+wp_set_current_user(0);
+assert_job($lookup('https://example.com/apply?x=1&y=2')->get_status() === 401, 'anonymous lookup denied');
+wp_set_current_user($admin->ID);
 
 // Existing pagination should point to the next page without dropping filters.
 $second = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'publish', 'post_title'=>'وظيفة ثانية', 'post_content'=>'الوصف'));
@@ -80,4 +99,13 @@ $_GET['mh_page'] = '2';
 $second_page = mah_jobs_lite_shortcode(array('per_page'=>1));
 assert_job(strpos($first_page, 'وظيفة ثانية') !== false || strpos($first_page, 'وظيفة نشطة') !== false, 'first page has a fixture');
 assert_job((strpos($first_page, 'وظيفة ثانية') !== false) !== (strpos($second_page, 'وظيفة ثانية') !== false), 'pagination returns different jobs');
+
+// Document the outstanding SEO gap rather than claiming the 0.6.5 noindex
+// policy is reproduced. This fixture has only WordPress and Lite enabled.
+$board = wp_insert_post(array('post_type'=>'page', 'post_status'=>'publish', 'post_name'=>'hotel-jobs', 'post_title'=>'وظائف'));
+$wp_query = new WP_Query(array('page_id'=>$board));
+$wp_the_query = $wp_query;
+$_GET = array('mh_country'=>'test-country');
+$robots = apply_filters('wp_robots', array());
+assert_job(empty($robots['noindex']), 'known gap: Lite alone does not add noindex on filtered board');
 echo "WordPress isolated integration passed\n";
