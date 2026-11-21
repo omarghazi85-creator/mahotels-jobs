@@ -1,7 +1,7 @@
 name: Lite SEO isolated WordPress integration
 on:
   push:
-    branches: [fix/lite-integration-20261121, fix/engine-lite-draft-20261121]
+    branches: [fix/lite-integration-20261121, fix/engine-lite-draft-20261121, fix/lite-manual-review-20261121]
   pull_request:
     branches: [fix/lite-legacy-reference-20261121]
 permissions:
@@ -35,6 +35,8 @@ jobs:
         run: |
           php -l wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php
           php -l wordpress/mahotels-jobs-lite/seo-compat.php
+          php -l wordpress/mahotels-jobs-lite/manual-review.php
+          php -l tests/wordpress-integration/manual-review-check.php
           php -l tests/wordpress-integration/seo-check.php
       - name: Install isolated WordPress
         run: |
@@ -80,6 +82,8 @@ jobs:
           for attempt in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8888/ && break; sleep 1; done
           term_id="$(php /tmp/wp.phar term list ma_job_country --slug=scope-test --field=term_id --path=/tmp/mahotels-wp)"
           FIXTURE_SITE=http://127.0.0.1:8888 FIXTURE_PASSWORD="$test_password" FIXTURE_TERM_ID="$term_id" node --experimental-strip-types tests/engine-service-http.mjs
+      - name: Test manual editorial readiness permissions
+        run: php /tmp/wp.phar eval-file tests/wordpress-integration/manual-review-check.php --path=/tmp/mahotels-wp
       - name: Test SEO hooks against WordPress
         run: php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
       - name: Test coexistence without duplicate SEO hooks
@@ -87,3 +91,4 @@ jobs:
           cp tests/wordpress-integration/legacy-fixture.php /tmp/mahotels-wp/wp-content/plugins/legacy-fixture.php
           php /tmp/wp.phar plugin activate legacy-fixture --path=/tmp/mahotels-wp
           LITE_TEST_COEXIST=1 php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
+          LITE_TEST_COEXIST=1 php /tmp/wp.phar eval-file tests/wordpress-integration/manual-review-check.php --path=/tmp/mahotels-wp
