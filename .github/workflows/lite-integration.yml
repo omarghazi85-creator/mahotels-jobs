@@ -33,8 +33,25 @@ jobs:
           cd /tmp/isolated-wp
           php /tmp/wp-cli.phar core download --quiet
           php /tmp/wp-cli.phar config create --dbname=isolated_wp --dbuser=root --dbpass=isolated-test-password --dbhost=127.0.0.1:3306 --skip-check
+          php /tmp/wp-cli.phar config set WP_ENVIRONMENT_TYPE local --type=constant
           php /tmp/wp-cli.phar core install --url=http://example.test --title=Test --admin_user=fixture_admin --admin_password=fixture-password --admin_email=fixture@example.test --skip-email
           cp -R "$GITHUB_WORKSPACE/wordpress/mahotels-jobs-lite" wp-content/plugins/
           php /tmp/wp-cli.phar plugin activate mahotels-jobs-lite
       - name: Run isolated integration
         run: cd /tmp/isolated-wp && php /tmp/wp-cli.phar eval-file "$GITHUB_WORKSPACE/tests/lite-integration.php"
+      - name: Verify application-password authentication over local HTTP
+        run: |
+          cd /tmp/isolated-wp
+          php /tmp/wp-cli.phar option update home http://127.0.0.1:8888
+          php /tmp/wp-cli.phar option update siteurl http://127.0.0.1:8888
+          test_app_password="$(php /tmp/wp-cli.phar user application-password create fixture_admin fixture-check --porcelain)"
+          php -S 127.0.0.1:8888 index.php >/tmp/isolated-wp-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8888/ && break; sleep 1; done
+          data='{"source":"marriott","original_id":"TEST-123","source_url":"https://careers.marriott.com/job/TEST-123"}'
+          auth_status="$(curl -sS -o /tmp/authorized.json -w '%{http_code}' -u "fixture_admin:$test_app_password" -H 'Content-Type: application/json' -d "$data" 'http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/source-exists')"
+          test "$auth_status" = 200
+          php -r '$r=json_decode(file_get_contents("/tmp/authorized.json"), true); if ($r !== ["exists"=>false]) exit(1);'
+          anon_status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$data" 'http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/source-exists')"
+          test "$anon_status" = 401
