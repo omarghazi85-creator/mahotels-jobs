@@ -38,6 +38,8 @@ jobs:
           php /tmp/wp.phar plugin activate mahotels-jobs-lite --path=/tmp/mahotels-wp
       - name: Test job compatibility and draft metadata bridge
         run: php /tmp/wp.phar eval-file tests/lite-integration.php --path=/tmp/mahotels-wp
+      - name: Test scoped service permissions
+        run: php /tmp/wp.phar eval-file tests/service-scope.php --path=/tmp/mahotels-wp
       - name: Test SEO hooks against WordPress
         run: php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
       - name: Test coexistence without duplicate SEO hooks
