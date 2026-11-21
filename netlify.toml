@@ -1,4 +1,4 @@
 [build]
   publish = "public"
-  command = "npm run build"
+  command = "npm run build && node scripts/wp-http-probe.mjs"
   functions = "netlify/functions"
