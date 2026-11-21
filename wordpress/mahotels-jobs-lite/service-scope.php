@@ -4,6 +4,43 @@ defined('ABSPATH') || exit;
 /** Experimental: explicitly grant mah_jobs_service to a dedicated service user.
  * No role or user is created on activation. Do not grant ordinary post caps. */
 add_action('rest_api_init', function () {
+    register_rest_route('mahotels-jobs/v1', '/service-drafts/slug-exists', array(
+        'methods'=>'POST',
+        'permission_callback'=>function () { return current_user_can('mah_jobs_service'); },
+        'callback'=>function ($request) {
+            $slug = $request->get_param('slug');
+            if (!is_string($slug) || !preg_match('/^ma-jobs-[a-f0-9]{32}$/D', $slug)) {
+                return new WP_Error('invalid_slug', 'Invalid slug.', array('status'=>400));
+            }
+            global $wpdb;
+            $wpdb->last_error = '';
+            $ids = get_posts(array('post_type'=>'ma_hotel_job', 'post_status'=>array('publish','draft','pending','private','future','trash'),
+                'name'=>$slug, 'posts_per_page'=>1, 'fields'=>'ids', 'no_found_rows'=>true, 'suppress_filters'=>true, 'cache_results'=>false));
+            // WordPress can append this suffix to the post_name on trashing.
+            if (!$ids && $wpdb->last_error === '') {
+                $ids = get_posts(array('post_type'=>'ma_hotel_job', 'post_status'=>'trash', 'name'=>$slug . '__trashed',
+                    'posts_per_page'=>1, 'fields'=>'ids', 'no_found_rows'=>true, 'suppress_filters'=>true, 'cache_results'=>false));
+            }
+            if ($wpdb->last_error !== '') { return new WP_Error('lookup_failed', 'Slug lookup unavailable.', array('status'=>503)); }
+            return rest_ensure_response(array('exists'=>!empty($ids)));
+        },
+    ));
+    register_rest_route('mahotels-jobs/v1', '/service-drafts/(?P<id>\d+)', array(
+        'methods'=>'GET',
+        'permission_callback'=>function ($request) {
+            $id = (int)$request['id'];
+            return current_user_can('mah_jobs_service') && get_post_type($id) === 'ma_hotel_job' &&
+                get_post_status($id) === 'draft' && (int)get_post_field('post_author',$id) === get_current_user_id();
+        },
+        'callback'=>function ($request) {
+            $id=(int)$request['id'];
+            $terms=wp_get_post_terms($id, 'ma_job_country', array('fields'=>'ids'));
+            if (is_wp_error($terms)) { return new WP_Error('read_failed','Draft lookup unavailable.',array('status'=>503)); }
+            return rest_ensure_response(array('id'=>$id, 'status'=>'draft', 'slug'=>get_post_field('post_name',$id),
+                'title'=>get_post_field('post_title',$id), 'content'=>get_post_field('post_content',$id),
+                'country_ids'=>array_map('intval',$terms)));
+        },
+    ));
     register_rest_route('mahotels-jobs/v1', '/service-drafts', array(
         'methods' => 'POST',
         'permission_callback' => function () { return current_user_can('mah_jobs_service'); },
