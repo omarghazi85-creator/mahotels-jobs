@@ -10,8 +10,10 @@ export default async (request: Request) => {
     tokenReady && groqReady;
   const publishingEnabled = !stopped && enabled('ENABLE_WP_SYNC','true') &&
     enabled('WP_DRAFT_ONLY','true') && enabled('WP_JOB_SCHEMA_VERIFIED','true') &&
+    enabled('WP_LEGACY_AUDIT_VERIFIED','true') &&
+    (!enabled('ENABLE_DAILY_DRAFTS','true') || (enabled('WP_TEST_DRAFT_APPROVED','true') && enabled('WP_LEGACY_IMPORTER_DISABLED','true'))) &&
     Netlify.env.get('WP_SITE_URL') === 'https://mahotels.net' &&
-    Boolean(Netlify.env.get('WP_JOB_REST_BASE')) && tokenReady &&
+    tokenReady &&
     Boolean(Netlify.env.get('WP_USERNAME')) && Boolean(Netlify.env.get('WP_APP_PASSWORD'));
   const body = {
     service: 'mahotels-jobs',

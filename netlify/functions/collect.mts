@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { dispatchDrafts } from '../../src/daily-policy.mts';
 import { collectMarriott } from '../../src/marriott.mts';
 import type { Config } from '@netlify/functions';
 import { collectAccor, collectRadisson, collectRotana, normalizeApplyUrl, type Vacancy } from '../../src/sources.mts';
@@ -102,7 +103,21 @@ export default async (request: Request) => {
       }
     }
   }
-  console.log(JSON.stringify({ collected, translated, attempts, limit, publish_enabled: false }));
+  console.log(JSON.stringify({ collected, translated, attempts, limit }));
+  // Separate opt-in: the first verified manual draft is a prerequisite checked
+  // independently by the writer. Both operations remain stopped by default.
+  if (env('ENABLE_DAILY_DRAFTS') !== 'true' || env('ENABLE_WP_SYNC') !== 'true' ||
+      env('WP_DRAFT_ONLY') !== 'true' || env('WP_JOB_SCHEMA_VERIFIED') !== 'true') return;
+  const site = env('URL');
+  if (!/^https:\/\/[-a-z0-9.]+$/i.test(site)) { console.error('Invalid site URL'); return; }
+  await dispatchDrafts(limit, () => env('JOBS_EMERGENCY_STOP') !== 'false', async () => {
+    const response = await fetch(new URL('/.netlify/functions/publish', site), {
+      method:'POST', headers:{'x-mahotels-dispatch-token':token}, signal:AbortSignal.timeout(120000)
+    });
+    if (!response.ok) { console.error('Draft dispatch stopped', response.status); return {ok:false}; }
+    const data = await response.json() as {drafts_created?:number};
+    return {ok:true, draftsCreated:data.drafts_created};
+  });
 };
 // Long-running collection runs separately from the short scheduled dispatcher.
 export const config: Config = { background: true };
