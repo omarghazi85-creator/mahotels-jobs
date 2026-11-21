@@ -8,6 +8,14 @@
  * Requires PHP: 7.4
  */
 defined('ABSPATH') || exit;
+require_once __DIR__ . '/draft-bridge.php';
+
+// SEO ownership remains with the legacy plugin while it is active.
+add_action('plugins_loaded', function () {
+    if (!class_exists('MA_Hotels_Jobs')) {
+        require_once __DIR__ . '/seo-compat.php';
+    }
+});
 
 /** Historical legacy 0.6.5 format; verify against installed 0.7.0 before use. */
 function mah_jobs_lite_active_clause() {
