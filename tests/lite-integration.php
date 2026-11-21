@@ -33,6 +33,7 @@ assert_job($wp_query->have_posts(), 'single fixture loaded');
 $wp_query->the_post();
 $content = apply_filters('the_content', get_the_content());
 assert_job(strpos($content, 'فندق اختبار') !== false, 'company displayed');
-assert_job(strpos($content, 'example.com/apply?x=1&amp;y=2') !== false, 'source URL and query retained');
+$decoded = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+assert_job(strpos($decoded, 'https://example.com/apply?x=1&y=2') !== false, 'source URL and query retained');
 wp_reset_postdata();
 echo "WordPress isolated integration passed\n";
