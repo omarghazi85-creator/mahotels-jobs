@@ -1,8 +1,15 @@
 <?php
 defined('ABSPATH') || exit;
 
-/** Experimental: explicitly grant mah_jobs_service to a dedicated service user.
- * No role or user is created on activation. Do not grant ordinary post caps. */
+/** Register a dedicated role without creating or changing any user. An existing
+ * role with the same slug is never modified; inspect any collision before use. */
+add_action('init', function () {
+    if (!get_role('mah_jobs_service')) {
+        add_role('mah_jobs_service', 'MAHotels Jobs Service', array(
+            'read'=>true, 'mah_jobs_service'=>true,
+        ));
+    }
+}, 1);
 add_action('rest_api_init', function () {
     register_rest_route('mahotels-jobs/v1', '/service-drafts/slug-exists', array(
         'methods'=>'POST',
