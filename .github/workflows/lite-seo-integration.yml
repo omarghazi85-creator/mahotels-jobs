@@ -33,11 +33,33 @@ jobs:
           mkdir -p /tmp/mahotels-wp
           php /tmp/wp.phar core download --path=/tmp/mahotels-wp --quiet
           php /tmp/wp.phar config create --path=/tmp/mahotels-wp --dbname=wp_test --dbuser=root --dbpass=test-only --dbhost=127.0.0.1:3306 --skip-check --quiet
+          php /tmp/wp.phar config set WP_ENVIRONMENT_TYPE local --type=constant --path=/tmp/mahotels-wp
           php /tmp/wp.phar core install --path=/tmp/mahotels-wp --url=http://localhost --title=Test --admin_user=fixture_admin --admin_password=test-only-password --admin_email=test@example.test --skip-email --quiet
           cp -R wordpress/mahotels-jobs-lite /tmp/mahotels-wp/wp-content/plugins/
           php /tmp/wp.phar plugin activate mahotels-jobs-lite --path=/tmp/mahotels-wp
       - name: Test job compatibility and draft metadata bridge
         run: php /tmp/wp.phar eval-file tests/lite-integration.php --path=/tmp/mahotels-wp
+      - name: Test scoped service permissions
+        run: php /tmp/wp.phar eval-file tests/service-scope.php --path=/tmp/mahotels-wp
+      - name: Test scoped application password over loopback HTTP
+        run: |
+          cd /tmp/mahotels-wp
+          php /tmp/wp.phar option update home http://127.0.0.1:8888
+          php /tmp/wp.phar option update siteurl http://127.0.0.1:8888
+          test_password="$(php /tmp/wp.phar user application-password create fixture_service scope-http --porcelain --user=fixture_admin)"
+          php -S 127.0.0.1:8888 index.php >/tmp/scope-wp.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in 1 2 3 4 5; do curl -s -o /dev/null http://127.0.0.1:8888/ && break; sleep 1; done
+          term_id="$(php /tmp/wp.phar term list ma_job_country --slug=scope-test --field=term_id)"
+          php -r '$t=(int)$argv[1];echo json_encode(["title"=>"HTTP fixture","content"=>"<p>fixture</p>","slug"=>"ma-jobs-".str_repeat("a",32),"country_id"=>$t]);' "$term_id" >/tmp/scope-create.json
+          created="$(curl -sS -o /tmp/scope-result.json -w '%{http_code}' -u "fixture_service:$test_password" -H 'Content-Type: application/json' --data-binary @/tmp/scope-create.json 'http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/service-drafts')"
+          test "$created" = 201
+          post_id="$(php -r '$r=json_decode(file_get_contents("/tmp/scope-result.json"),true); if (($r["status"]??"")!=="draft" || empty($r["id"])) exit(1); echo (int)$r["id"];')"
+          denied="$(curl -sS -o /dev/null -w '%{http_code}' -u "fixture_service:$test_password" -H 'Content-Type: application/json' -d '{"status":"publish"}' "http://127.0.0.1:8888/?rest_route=/wp/v2/ma_hotel_job/$post_id")"
+          test "$denied" = 403
+          status="$(php /tmp/wp.phar post get "$post_id" --field=post_status)"
+          test "$status" = draft
       - name: Test SEO hooks against WordPress
         run: php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
       - name: Test coexistence without duplicate SEO hooks
