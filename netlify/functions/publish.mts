@@ -1,6 +1,10 @@
 import { getStore } from '@netlify/blobs';
+import { reserveDailyWrite } from '../../src/daily-policy.mts';
 import { applicationLink, duplicateLinks, jobSlug, renderDraft, type SavedJob } from '../../src/wordpress.mts';
 const env = (name: string) => Netlify.env.get(name) ?? '';
+const digest = async (value:string) => Array.from(new Uint8Array(
+  await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+)).map(x => x.toString(16).padStart(2,'0')).join('');
 
 type Post = {
   id: number; slug?: string; status?: string;
@@ -96,7 +100,15 @@ export default async (request: Request) => {
     return new Response('Audit blocked', { status:503 });
   }
   const store = getStore('mahotels-jobs-v1');
-  // One manual test draft per invocation. No retries of ambiguous writes.
+  const testClaims = getStore('mahotels-jobs-one-draft-claim-v1');
+  // Daily mode is explicitly enabled only after a verified test draft. A missing
+  // or incomplete verification record can never authorize automatic writes.
+  const dailyMode = env('ENABLE_DAILY_DRAFTS') === 'true';
+  if (dailyMode) {
+    const verified = await testClaims.get('first-ever-test-draft', {type:'json', consistency:'strong'}) as {state?:string}|null;
+    if (verified?.state !== 'verified') return new Response('Verified test draft required', {status:503});
+  }
+  // At most one draft per invocation. Never retry ambiguous writes.
   for await (const page of store.list({paginate:true})) {
     for (const {key} of page.blobs) {
       const entry = await store.getWithMetadata(key, {type:'json', consistency:'strong'});
@@ -116,16 +128,28 @@ export default async (request: Request) => {
           // Preserve ready state until manually reconciled with the existing post.
           continue;
         }
-        // Atomically reserve the ONE test draft allowed across every invocation and deploy.
-        // Never silently release this lock after an ambiguous WordPress write.
-        const testClaims = getStore('mahotels-jobs-one-draft-claim-v1');
-        const testClaim = await testClaims.setJSON('first-ever-test-draft', {
-          key, slug, reserved_at:new Date().toISOString(), state:'reserved'
-        }, {onlyIfNew:true});
-        if (!testClaim.modified) {
-          console.log('One-draft test budget already reserved; no more WP writes');
-          return new Response('One test draft already attempted', {status:409});
+        if (dailyMode) {
+          // Two durable UTC-day slots count attempts, not only successful writes.
+          // Never release a slot after an uncertain network outcome.
+          const claims = getStore('mahotels-jobs-daily-writes-v1');
+          const date = new Date().toISOString().slice(0,10);
+          const max = Math.min(2, Math.max(1, Number(env('MAX_JOBS_PER_DAY') || 2) || 2));
+          if (!await reserveDailyWrite(claims, date, max, key, slug))
+            return new Response('Daily draft budget exhausted', {status:409});
+        } else {
+          // The first production test is limited to one attempt across all deploys.
+          const testClaim = await testClaims.setJSON('first-ever-test-draft', {
+            key, slug, reserved_at:new Date().toISOString(), state:'reserved'
+          }, {onlyIfNew:true});
+          if (!testClaim.modified) return new Response('One test draft already attempted', {status:409});
         }
+        // Reserve the canonical application URL across source providers and
+        // concurrent requests; never release on an uncertain remote outcome.
+        const identities = getStore('mahotels-jobs-identity-claims-v1');
+        const identity = await identities.setJSON(await digest(apply), {
+          key, slug, state:'reserved', reserved_at:new Date().toISOString()
+        }, {onlyIfNew:true});
+        if (!identity.modified) continue;
         // Mark as in-flight with a conditional write, protecting against parallel executions.
         // A network timeout after WP creation leaves this state for manual reconciliation.
         const result = await store.setJSON(key, {...job,state:'attempting'}, {onlyIfMatch:entry.etag});
@@ -154,6 +178,14 @@ export default async (request: Request) => {
           return new Response('Draft created; review required',{status:503});
         }
         await store.setJSON(key, {...job,state:'sent',wordpress_id:created.id});
+        if (!dailyMode) {
+          const record = await testClaims.getWithMetadata('first-ever-test-draft', {type:'json', consistency:'strong'});
+          if (!record?.data || !record.etag) throw Error('Test claim unavailable for verification');
+          const mark = await testClaims.setJSON('first-ever-test-draft', {
+            ...(record.data as object), state:'verified', wordpress_id:created.id
+          }, {onlyIfMatch:record.etag});
+          if (!mark.modified) throw Error('Test verification marker was not saved');
+        }
         console.log('Verified test draft',created.id,job.source);
         return new Response(JSON.stringify({drafts_created:1,id:created.id}),{
           headers:{'Content-Type':'application/json'}});
