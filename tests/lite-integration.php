@@ -48,5 +48,36 @@ assert_job(get_post_meta($active, '_ma_job_expires_on', true) === '', 'invalid d
 $_POST['mah_lite_expires_on'] = '2030-02-28';
 do_action('save_post_ma_hotel_job', $active);
 assert_job(get_post_meta($active, '_ma_job_expires_on', true) === '2030-02-28', 'valid date is stored');
+$editor_nonce = wp_create_nonce('mah_jobs_lite_save');
+wp_set_current_user(0);
+$_POST = array('mah_jobs_lite_nonce'=>$editor_nonce, 'mah_lite_company'=>'unauthorized');
+do_action('save_post_ma_hotel_job', $active);
+assert_job(get_post_meta($active, '_ma_job_company', true) === 'فندق اختبار', 'anonymous edit blocked');
 $_POST = array();
+
+// Evidence of the remaining duplicate-detection gap: protected legacy metadata
+// must not be assumed to be available over REST merely because it exists in WP.
+wp_set_current_user($admin->ID);
+$request = new WP_REST_Request('GET', '/wp/v2/ma_hotel_job/' . $active);
+$request->set_param('context', 'edit');
+$response = rest_do_request($request);
+assert_job($response->get_status() === 200, 'admin REST read works');
+$rest_data = $response->get_data();
+assert_job(empty($rest_data['meta']['_ma_job_source_url']), 'legacy source metadata is not exposed in REST');
+
+// Existing pagination should point to the next page without dropping filters.
+$second = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'publish', 'post_title'=>'وظيفة ثانية', 'post_content'=>'الوصف'));
+wp_set_object_terms($second, array((int)$term['term_id']), 'ma_job_country');
+update_post_meta($second, '_ma_job_city', 'مدينة اختبار');
+update_post_meta($second, '_ma_job_role', 'مدير اختبار');
+update_post_meta($second, '_ma_job_posted_on', '2026-10-05');
+$_SERVER['REQUEST_URI'] = '/hotel-jobs?mh_country=test-country';
+$_GET = array('mh_country'=>'test-country');
+$first_page = html_entity_decode(mah_jobs_lite_shortcode(array('per_page'=>1)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+assert_job(strpos($first_page, 'mh_page=2') !== false, 'next-page link points to page 2');
+assert_job(strpos($first_page, 'mh_country=test-country') !== false, 'next-page link retains country');
+$_GET['mh_page'] = '2';
+$second_page = mah_jobs_lite_shortcode(array('per_page'=>1));
+assert_job(strpos($first_page, 'وظيفة ثانية') !== false || strpos($first_page, 'وظيفة نشطة') !== false, 'first page has a fixture');
+assert_job((strpos($first_page, 'وظيفة ثانية') !== false) !== (strpos($second_page, 'وظيفة ثانية') !== false), 'pagination returns different jobs');
 echo "WordPress isolated integration passed\n";
