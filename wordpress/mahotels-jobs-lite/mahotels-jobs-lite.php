@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAHotels Jobs Lite
  * Description: Lightweight job display and WordPress REST bridge. Recruitment, translation and scheduling run outside WordPress.
- * Version: 0.1.3
+ * Version: 0.1.4
  * Author: MAHotels
  * Text Domain: mah-jobs-lite
  * Requires PHP: 7.4
@@ -77,8 +77,12 @@ add_action('init', function () {
 function mah_jobs_lite_shortcode($atts = array()) {
     $atts = shortcode_atts(array('per_page' => 20), (array) $atts, 'ma_hotels_jobs');
     $per_page = min(24, max(1, absint($atts['per_page'])));
-    $page = isset($_GET['mhj_page']) ? max(1, absint(wp_unslash($_GET['mhj_page']))) : 1;
-    $country = isset($_GET['mhj_country']) ? absint(wp_unslash($_GET['mhj_country'])) : 0;
+    // Existing public links use mh_page and country slugs in mh_country.
+    // Keep the old preview's mhj_* parameters readable as a fallback.
+    $page_input = isset($_GET['mh_page']) ? $_GET['mh_page'] : ($_GET['mhj_page'] ?? 1);
+    $page = is_scalar($page_input) ? max(1, absint(wp_unslash($page_input))) : 1;
+    $country_input = isset($_GET['mh_country']) ? $_GET['mh_country'] : ($_GET['mhj_country'] ?? '');
+    $country_input = is_scalar($country_input) ? sanitize_text_field(wp_unslash((string) $country_input)) : '';
     $city = isset($_GET['mhj_city']) && is_string($_GET['mhj_city'])
         ? sanitize_text_field(wp_unslash($_GET['mhj_city'])) : '';
     $job_title = isset($_GET['mhj_job']) && is_string($_GET['mhj_job'])
@@ -92,12 +96,11 @@ function mah_jobs_lite_shortcode($atts = array()) {
     if (is_wp_error($terms)) {
         $terms = array();
     }
-    $allowed = array();
+    $country = 0;
     foreach ($terms as $term) {
-        $allowed[(int) $term->term_id] = $term;
-    }
-    if ($country && !isset($allowed[$country])) {
-        $country = 0;
+        if ($country_input !== '' && ($country_input === (string) $term->slug || $country_input === (string) $term->term_id)) {
+            $country = (int) $term->term_id;
+        }
     }
 
     $args = array(
@@ -147,12 +150,17 @@ function mah_jobs_lite_shortcode($atts = array()) {
         .mah-jobs-lite__paging{display:flex;gap:10px;flex-wrap:wrap;margin:28px 0}
         .mah-jobs-lite__paging a{padding:6px 13px;border:1px solid #cfdadc;border-radius:7px;color:#116874}
         </style>
+        <nav aria-label="<?php echo esc_attr('الوظائف حسب الدولة'); ?>">
+            <?php foreach ($terms as $term) : ?>
+                <a href="<?php echo esc_url(add_query_arg('mh_country', $term->slug, remove_query_arg(array('mh_country', 'mhj_country', 'mh_page', 'mhj_page')))); ?>"><?php echo esc_html('وظائف ' . $term->name); ?></a>
+            <?php endforeach; ?>
+        </nav>
         <form class="mah-jobs-lite__filters" method="get">
             <label for="mhj-country"><?php echo esc_html('تصفية الوظائف حسب الدولة'); ?></label>
-            <select id="mhj-country" name="mhj_country">
-                <option value="0"><?php echo esc_html('جميع الدول'); ?></option>
+            <select id="mhj-country" name="mh_country">
+                <option value=""><?php echo esc_html('جميع الدول'); ?></option>
                 <?php foreach ($terms as $term) : ?>
-                    <option value="<?php echo esc_attr((string) $term->term_id); ?>" <?php selected($country, (int) $term->term_id); ?>>
+                    <option value="<?php echo esc_attr($term->slug); ?>" <?php selected($country, (int) $term->term_id); ?>>
                         <?php echo esc_html($term->name); ?>
                     </option>
                 <?php endforeach; ?>
@@ -192,13 +200,13 @@ function mah_jobs_lite_shortcode($atts = array()) {
         </div>
         <?php
         if ($jobs->max_num_pages > 1) {
-            $base = remove_query_arg('mhj_page');
+            $base = remove_query_arg(array('mh_page', 'mhj_page'));
             echo '<nav class="mah-jobs-lite__paging" aria-label="صفحات الوظائف">';
             if ($page > 1) {
-                echo '<a href="' . esc_url(add_query_arg('mhj_page', $page - 1, $base)) . '">السابق</a>';
+                echo '<a href="' . esc_url(add_query_arg('mh_page', $page - 1, $base)) . '">السابق</a>';
             }
             if ($page < $jobs->max_num_pages) {
-                echo '<a href="' . esc_url(add_query_arg('mhj_page', $page + 1, $base)) . '">التالي</a>';
+                echo '<a href="' . esc_url(add_query_arg('mh_page', $page + 1, $base)) . '">التالي</a>';
             }
             echo '</nav>';
         }
