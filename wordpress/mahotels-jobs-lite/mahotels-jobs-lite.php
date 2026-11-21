@@ -23,7 +23,7 @@ function mah_jobs_lite_fields() {
 }
 
 /**
- * Authenticated exact-match duplicate check for the historical metadata key.
+ * Authenticated conservative duplicate check for the historical metadata key.
  * Only reports existence, never exports the stored links or job records.
  * Confirm the key against installed 0.7.0 before using in production.
  */
@@ -44,6 +44,8 @@ add_action('rest_api_init', function () {
                 isset($parts['user']) || isset($parts['pass'])) {
                 return new WP_Error('invalid_source_url', 'Invalid source URL.', array('status' => 400));
             }
+            global $wpdb;
+            $wpdb->last_error = '';
             $ids = get_posts(array(
                 'post_type' => 'ma_hotel_job',
                 'post_status' => array('publish', 'draft', 'pending', 'private', 'future'),
@@ -51,9 +53,13 @@ add_action('rest_api_init', function () {
                 'fields' => 'ids',
                 'no_found_rows' => true,
                 'suppress_filters' => true,
+                'cache_results' => false,
                 'meta_key' => '_ma_job_source_url',
                 'meta_value' => $url,
             ));
+            if ($wpdb->last_error !== '') {
+                return new WP_Error('lookup_failed', 'Source lookup unavailable.', array('status' => 503));
+            }
             return rest_ensure_response(array('exists' => !empty($ids)));
         },
     ));
