@@ -1,4 +1,4 @@
 [build]
   publish = "public"
-  command = "npm run build"
+  command = "npm run build && node --experimental-strip-types scripts/groq-real-probe.mjs"
   functions = "netlify/functions"
