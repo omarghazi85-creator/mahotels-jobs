@@ -36,4 +36,17 @@ assert_job(strpos($content, 'فندق اختبار') !== false, 'company display
 $decoded = html_entity_decode($content, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 assert_job(strpos($decoded, 'https://example.com/apply?x=1&y=2') !== false, 'source URL and query retained');
 wp_reset_postdata();
+// Verify editing preserves existing metadata on malformed dates and rejects writes without a nonce.
+$admin = get_user_by('login', 'fixture_admin');
+wp_set_current_user($admin->ID);
+$_POST = array('mah_lite_expires_on'=>'2030-02-30');
+do_action('save_post_ma_hotel_job', $active);
+assert_job(get_post_meta($active, '_ma_job_expires_on', true) === '', 'missing nonce blocks writes');
+$_POST['mah_jobs_lite_nonce'] = wp_create_nonce('mah_jobs_lite_save');
+do_action('save_post_ma_hotel_job', $active);
+assert_job(get_post_meta($active, '_ma_job_expires_on', true) === '', 'invalid date is rejected');
+$_POST['mah_lite_expires_on'] = '2030-02-28';
+do_action('save_post_ma_hotel_job', $active);
+assert_job(get_post_meta($active, '_ma_job_expires_on', true) === '2030-02-28', 'valid date is stored');
+$_POST = array();
 echo "WordPress isolated integration passed\n";
