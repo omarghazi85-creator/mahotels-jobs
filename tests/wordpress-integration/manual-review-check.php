@@ -10,7 +10,7 @@ update_post_meta($id, '_ma_job_ar_ready', '0');
 update_post_meta($id, '_ma_job_verified_on', '2026-11-01');
 do_action('add_meta_boxes_ma_hotel_job', get_post($id));
 ob_start(); do_meta_boxes('ma_hotel_job', 'side', get_post($id)); $ui=ob_get_clean();
-review_assert(strpos($ui, 'mah_lite_ar_ready') !== false, 'editorial review control missing');
+review_assert((strpos($ui, 'mah_lite_ar_ready') !== false) === (getenv('LITE_TEST_COEXIST') !== '1'), 'editorial review control ownership incorrect');
 $review_nonce = wp_create_nonce('mah_jobs_lite_review_' . $id);
 $_POST = array('mah_lite_ar_ready'=>'1');
 do_action('save_post_ma_hotel_job', $id);
