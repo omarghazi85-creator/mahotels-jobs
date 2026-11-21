@@ -1,4 +1,4 @@
 [build]
   publish = "public"
-  command = "npm run build"
+  command = "npm run build && node scripts/groq-build-probe.mjs"
   functions = "netlify/functions"

@@ -1,5 +1,3 @@
-import type { Config } from '@netlify/functions';
-
 // Runs once a day (02:00 UTC = 05:00 Riyadh). It only dispatches.
 // No external recruitment, Groq, or WordPress work happens in this 30s function.
 const env = (key: string) => Netlify.env.get(key) ?? '';
@@ -27,4 +25,4 @@ export default async () => {
   }
   console.log('Background collection queued', response.status);
 };
-export const config: Config = { schedule: '0 2 * * *' };
+// Scheduling remains disabled until the complete acceptance checks pass.
