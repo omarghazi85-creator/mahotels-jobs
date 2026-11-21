@@ -7,9 +7,10 @@ add_action('rest_api_init', function () {
         'methods' => array('GET', 'POST'),
         'permission_callback' => function ($request) {
             $id = (int) $request['id'];
-            return current_user_can('edit_posts') && current_user_can('edit_others_posts') &&
-                current_user_can('edit_post', $id) && get_post_type($id) === 'ma_hotel_job' &&
-                get_post_status($id) === 'draft';
+            return (
+                (current_user_can('mah_jobs_service') && (int) get_post_field('post_author', $id) === get_current_user_id()) ||
+                (current_user_can('edit_posts') && current_user_can('edit_others_posts') && current_user_can('edit_post', $id))
+            ) && get_post_type($id) === 'ma_hotel_job' && get_post_status($id) === 'draft';
         },
         'callback' => function ($request) {
             $id = (int) $request['id'];
