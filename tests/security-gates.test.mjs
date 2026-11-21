@@ -24,6 +24,7 @@ test('WordPress endpoint rejects unauthorized requests after flags enabled', asy
   vars.set('ENABLE_WP_SYNC','true');
   vars.set('WP_DRAFT_ONLY','true');
   vars.set('WP_JOB_SCHEMA_VERIFIED','true');
+  vars.set('WP_LEGACY_AUDIT_VERIFIED','true');
   vars.set('INTERNAL_DISPATCH_TOKEN','x'.repeat(64));
   const result = await publish(new Request('https://example.org/.netlify/functions/publish',{method:'POST'}));
   assert.equal(result.status,403);
@@ -126,7 +127,7 @@ test('health reports controls as enabled only with all required credentials pres
   vars.clear();
   for (const [key,value] of Object.entries({
     JOBS_EMERGENCY_STOP:'false', ENABLE_COLLECTION:'true', ENABLE_WP_SYNC:'true',
-    WP_DRAFT_ONLY:'true',WP_JOB_SCHEMA_VERIFIED:'true',WP_SITE_URL:'https://mahotels.net',
+    WP_DRAFT_ONLY:'true',WP_JOB_SCHEMA_VERIFIED:'true',WP_LEGACY_AUDIT_VERIFIED:'true',WP_SITE_URL:'https://mahotels.net',
     WP_JOB_REST_BASE:'ma_hotel_job',GROQ_API_KEY:'fake-test-key',
     INTERNAL_DISPATCH_TOKEN:'x'.repeat(64), WP_USERNAME:'test-user',WP_APP_PASSWORD:'test-only-app-password'
   })) vars.set(key,value);

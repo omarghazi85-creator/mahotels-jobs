@@ -32,14 +32,22 @@ test('safe independent preview is admin-only and keeps the legacy shortcode in c
   assert.match(plugin,/return '';/);
 });
 
-test('lite keeps the four legacy filters and uses bounded core WordPress queries',()=>{
-  for (const param of ['mhj_city','mhj_job','mhj_month','mhj_year','mhj_country']) {
+test('lite accepts legacy filter links and preview fallbacks',()=>{
+  for (const param of ['mh_city','mh_role','mh_month','mh_year','mh_country','mhj_city','mhj_job','mhj_month','mhj_year','mhj_country']) {
     assert.ok(plugin.includes(param),param+' filter missing');
   }
   assert.match(plugin,/array\('per_page'\s*=>\s*20\)/);
-  assert.match(plugin,/\$args\['date_query'\]/);
-  assert.match(plugin,/\$date_clause\['month'\]/);
-  assert.match(plugin,/\$date_clause\['year'\]/);
+  assert.match(plugin,/_ma_job_posted_on/);
+  assert.match(plugin,/_ma_job_city/);
+  assert.match(plugin,/_ma_job_role/);
   assert.match(plugin,/sanitize_text_field\(wp_unslash/);
-  assert.match(plugin,/'s'\s*=>\s*trim\(\$city/);
+  assert.match(plugin,/mah_jobs_lite_active_clause\(\)/);
+});
+
+test('legacy details remain escaped and old plugin retains ownership when active',()=>{
+  assert.match(plugin,/class_exists\('MA_Hotels_Jobs'\)/);
+  assert.match(plugin,/_ma_job_source_url/);
+  assert.match(plugin,/esc_url\(\$source, array\('http', 'https'\)\)/);
+  assert.match(plugin,/esc_html\(\$value\)/);
+  assert.match(plugin,/_ma_job_expires_on/);
 });

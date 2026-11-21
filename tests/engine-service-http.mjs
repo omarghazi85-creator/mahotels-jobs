@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {sourceExists,slugExists,createServiceDraft,writeAndVerifyFields,readServiceDraft} from '../src/lite-bridge.mts';
+const {FIXTURE_SITE,FIXTURE_PASSWORD,FIXTURE_TERM_ID}=process.env;
+if(FIXTURE_SITE!=='http://127.0.0.1:8888' || !FIXTURE_PASSWORD || !/^\d+$/.test(FIXTURE_TERM_ID??'')) throw Error('Missing local-only test setup');
+const headers={Authorization:'Basic '+Buffer.from('fixture_service:'+FIXTURE_PASSWORD).toString('base64'),Accept:'application/json'};
+const key='e'.repeat(64),slug='ma-jobs-'+key.slice(0,32),id='ENGINE-HTTP-TEST';
+const job={key,source:'marriott',originalId:id,title:'Fixture role',company:'Fixture Hotel',city:'Riyadh',country:'Saudi Arabia',sourceUrl:'https://careers.marriott.com/job/ENGINE-HTTP-TEST',applyUrl:'https://careers.marriott.com/job/ENGINE-HTTP-TEST?posting_type=1',arabic_title:'وظيفة اختبار',arabic_description:'وصف اختباري',state:'ready',postedAt:'2026-11-20T00:00:00.000Z'};
+assert.equal(await slugExists(FIXTURE_SITE,headers,slug),false);
+assert.equal(await sourceExists(FIXTURE_SITE,headers,job),false);
+const draft={title:job.arabic_title,content:'<p>وصف اختباري</p><p><a href="'+job.applyUrl.replace('&','&amp;')+'">تقديم</a></p>',slug,ma_job_country:[Number(FIXTURE_TERM_ID)]};
+const postId=await createServiceDraft(FIXTURE_SITE,headers,draft);
+await writeAndVerifyFields(FIXTURE_SITE,headers,postId,job);
+const saved=await readServiceDraft(FIXTURE_SITE,headers,postId);
+assert.equal(saved.status,'draft');assert.equal(saved.slug,slug);assert.equal(saved.title,draft.title);assert.ok(saved.country_ids.includes(Number(FIXTURE_TERM_ID)));assert.ok(saved.content.includes('posting_type=1'));
+assert.equal(await slugExists(FIXTURE_SITE,headers,slug),true);assert.equal(await sourceExists(FIXTURE_SITE,headers,job),true);
+await assert.rejects(()=>writeAndVerifyFields(FIXTURE_SITE,headers,postId,job),/HTTP 409/);
+console.log('Scoped service HTTP adapter integration passed');

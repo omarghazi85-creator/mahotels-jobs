@@ -25,4 +25,4 @@ export default async () => {
   }
   console.log('Background collection queued', response.status);
 };
-// Scheduling remains disabled until the complete acceptance checks pass.
+// Scheduling remains disabled until end-to-end acceptance.
