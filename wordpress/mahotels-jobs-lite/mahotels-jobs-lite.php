@@ -21,6 +21,43 @@ function mah_jobs_lite_active_clause() {
 function mah_jobs_lite_fields() {
     return array('company' => 'الفندق أو الجهة', 'city' => 'المدينة', 'role' => 'المسمى الوظيفي', 'source_url' => 'رابط الإعلان الأصلي', 'posted_on' => 'تاريخ الإعلان YYYY-MM-DD', 'expires_on' => 'تاريخ الانتهاء YYYY-MM-DD', 'verified_on' => 'تاريخ التحقق YYYY-MM-DD');
 }
+
+/**
+ * Authenticated exact-match duplicate check for the historical metadata key.
+ * Only reports existence, never exports the stored links or job records.
+ * Confirm the key against installed 0.7.0 before using in production.
+ */
+add_action('rest_api_init', function () {
+    register_rest_route('mahotels-jobs/v1', '/source-exists', array(
+        'methods' => 'POST',
+        'permission_callback' => function () {
+            return current_user_can('edit_posts') && current_user_can('edit_others_posts');
+        },
+        'callback' => function ($request) {
+            $url = $request->get_param('source_url');
+            if (!is_string($url) || strlen($url) > 2048 || preg_match('/[\x00-\x20\x7f]/', $url)) {
+                return new WP_Error('invalid_source_url', 'Invalid source URL.', array('status' => 400));
+            }
+            $parts = wp_parse_url($url);
+            if (!is_array($parts) || empty($parts['host']) || !isset($parts['scheme']) ||
+                !in_array(strtolower($parts['scheme']), array('https', 'http'), true) ||
+                isset($parts['user']) || isset($parts['pass'])) {
+                return new WP_Error('invalid_source_url', 'Invalid source URL.', array('status' => 400));
+            }
+            $ids = get_posts(array(
+                'post_type' => 'ma_hotel_job',
+                'post_status' => array('publish', 'draft', 'pending', 'private', 'future'),
+                'posts_per_page' => 1,
+                'fields' => 'ids',
+                'no_found_rows' => true,
+                'suppress_filters' => true,
+                'meta_key' => '_ma_job_source_url',
+                'meta_value' => $url,
+            ));
+            return rest_ensure_response(array('exists' => !empty($ids)));
+        },
+    ));
+});
 add_action('add_meta_boxes_ma_hotel_job', function () {
     if (class_exists('MA_Hotels_Jobs')) { return; }
     add_meta_box('mah_jobs_lite_details', 'تفاصيل الوظيفة ومصدرها', function ($post) {
