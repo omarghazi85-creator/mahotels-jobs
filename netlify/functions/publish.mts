@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { legacyDuplicate } from '../../src/legacy-dedup.mts';
+import { draftFields, verifiedDraftFields } from '../../src/draft-fields.mts';
 import { applicationLink, duplicateLinks, jobSlug, renderDraft, type SavedJob } from '../../src/wordpress.mts';
 const env = (name: string) => Netlify.env.get(name) ?? '';
 
@@ -83,6 +84,12 @@ export default async (request: Request) => {
     if (!options.schema?.properties?.ma_job_country) {
       throw Error('Country taxonomy is not writable through job REST schema');
     }
+    // OPTIONS checks that the private bridge is installed before creating a draft.
+    const bridgeOptions = await fetchJSON(new URL('/wp-json/mahotels-jobs/v1/draft-fields/1',site), headers,
+      {method:'OPTIONS',redirect:'error'});
+    const bridge = await bridgeOptions.json() as {methods?:unknown};
+    if (!Array.isArray(bridge.methods) || !bridge.methods.includes('GET') || !bridge.methods.includes('POST'))
+      throw Error('Private draft fields route unavailable');
   } catch (error) {
     console.error('WordPress schema preflight failed closed', String(error));
     return new Response('WordPress schema unverified', {status:503});
@@ -108,7 +115,8 @@ export default async (request: Request) => {
       const apply = applicationLink(job);
       if (!apply) continue;
       let draft: ReturnType<typeof renderDraft>;
-      try { draft = renderDraft(job); } catch { continue; }
+      let fields: ReturnType<typeof draftFields>;
+      try { draft = renderDraft(job); fields = draftFields(job); } catch { continue; }
       const slug = jobSlug(job);
       try {
         const bySlug = await inspectBySlug(endpoint, slug, headers);
@@ -149,6 +157,17 @@ export default async (request: Request) => {
         if (!Number.isInteger(created.id) || created.status !== 'draft') {
           console.error('Unexpected WordPress create response',key);
           return new Response('Draft status unverified',{status:503});
+        }
+        const bridgeUrl = new URL('/wp-json/mahotels-jobs/v1/draft-fields/' + created.id,site);
+        try {
+          await fetchJSON(bridgeUrl, headers, {method:'POST', redirect:'error',
+            headers:{'Content-Type':'application/json'}, body:JSON.stringify(fields)});
+          const readFields = await fetchJSON(bridgeUrl, headers, {redirect:'error'});
+          if (!verifiedDraftFields(fields, await readFields.json(), created.id))
+            throw Error('Draft fields readback mismatch');
+        } catch (error) {
+          console.error('Draft fields need manual reconciliation',created.id,String(error));
+          return new Response('Draft created; metadata review required',{status:503});
         }
         // Read back: ensure taxonomy and application link are retained by the plugin.
         const read = await fetchJSON(new URL(endpoint.href.replace(/\/$/,'') + '/' + created.id + '?context=edit'),headers);
