@@ -50,6 +50,8 @@ jobs:
         run: php /tmp/wp.phar eval-file tests/lite-integration.php --path=/tmp/mahotels-wp
       - name: Test scoped service permissions
         run: php /tmp/wp.phar eval-file tests/service-scope.php --path=/tmp/mahotels-wp
+      - name: Test custom post-type capabilities
+        run: php /tmp/wp.phar eval-file tests/jetpack-cpt-test.php --path=/tmp/mahotels-wp
       - name: Test scoped application password over loopback HTTP
         run: |
           cd /tmp/mahotels-wp
