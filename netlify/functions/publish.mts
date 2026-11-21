@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { legacyDuplicate } from '../../src/legacy-dedup.mts';
 import { applicationLink, duplicateLinks, jobSlug, renderDraft, type SavedJob } from '../../src/wordpress.mts';
 const env = (name: string) => Netlify.env.get(name) ?? '';
 
@@ -114,6 +115,12 @@ export default async (request: Request) => {
         if (bySlug.length || existing.has(apply) || (job.sourceUrl && existing.has(new URL(job.sourceUrl).toString().replace(/\/$/, '')))) {
           console.log('Duplicate job suppressed',job.source,job.originalId);
           // Preserve ready state until manually reconciled with the existing post.
+          continue;
+        }
+        // Legacy source IDs and URLs are private meta and are not returned by
+        // the ordinary REST audit. A missing/failed endpoint must stop writes.
+        if (await legacyDuplicate(site, headers, job)) {
+          console.log('Legacy duplicate job suppressed',job.source);
           continue;
         }
         // Atomically reserve the ONE test draft allowed across every invocation and deploy.
