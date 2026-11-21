@@ -3,7 +3,7 @@ on:
   push:
     branches: [fix/lite-integration-20261121, fix/engine-lite-draft-20261121, fix/lite-manual-review-20261121]
   pull_request:
-    branches: [fix/lite-legacy-reference-20261121, fix/engine-lite-draft-20261121]
+    branches: [fix/lite-legacy-reference-20261121, fix/engine-lite-draft-20261121, fix/safe-netlify-jobs-20261116]
 permissions:
   contents: read
 jobs:
