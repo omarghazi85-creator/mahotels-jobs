@@ -64,9 +64,11 @@ $response = rest_do_request($request);
 assert_job($response->get_status() === 200, 'admin REST read works');
 $rest_data = $response->get_data();
 assert_job(empty($rest_data['meta']['_ma_job_source_url']), 'legacy source metadata is not exposed in REST');
-$lookup = function ($url) {
+$lookup = function ($url, $source = 'marriott', $id = 'not-matching') {
     $r = new WP_REST_Request('POST', '/mahotels-jobs/v1/source-exists');
     $r->set_param('source_url', $url);
+    $r->set_param('source', $source);
+    $r->set_param('original_id', $id);
     return rest_do_request($r);
 };
 $found = $lookup('https://example.com/apply?x=1&y=2');
@@ -88,6 +90,13 @@ assert_job($failure->get_status() === 503, 'database failure does not look like 
 $draft = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'draft', 'post_title'=>'مسودة'));
 update_post_meta($draft, '_ma_job_source_url', 'https://example.com/draft?id=10');
 assert_job($lookup('https://example.com/draft?id=10')->get_data() === array('exists'=>true), 'draft considered for duplicates');
+update_post_meta($draft, '_ma_job_source_id', 'AccorHotel:123456789');
+assert_job($lookup('https://example.com/different?utm_source=test', 'accor', '123456789')->get_data() === array('exists'=>true), 'identity finds same job with different URL parameters');
+update_post_meta($draft, '_ma_job_source_id', 'Accor:123456789');
+assert_job($lookup('https://example.com/elsewhere', 'accor', '123456789')->get_data() === array('exists'=>true), 'Accor legacy alias supported');
+wp_trash_post($draft);
+assert_job($lookup('https://example.com/elsewhere', 'accor', '123456789')->get_data() === array('exists'=>true), 'trashed jobs also suppress duplicates');
+assert_job($lookup('https://example.com/elsewhere', 'unknown', '123456789')->get_status() === 400, 'unknown provider rejected');
 assert_job($lookup('javascript:alert(1)')->get_status() === 400, 'invalid scheme rejected');
 $subscriber = wp_create_user('unprivileged', 'fixture-password', 'subscriber@example.test');
 wp_set_current_user($subscriber);
