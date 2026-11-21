@@ -121,12 +121,52 @@ $second_page = mah_jobs_lite_shortcode(array('per_page'=>1));
 assert_job(strpos($first_page, 'وظيفة ثانية') !== false || strpos($first_page, 'وظيفة نشطة') !== false, 'first page has a fixture');
 assert_job((strpos($first_page, 'وظيفة ثانية') !== false) !== (strpos($second_page, 'وظيفة ثانية') !== false), 'pagination returns different jobs');
 
-// Document the outstanding SEO gap rather than claiming the 0.6.5 noindex
-// policy is reproduced. This fixture has only WordPress and Lite enabled.
+// A valid country-only board remains indexable, consistent with the legacy rule.
 $board = wp_insert_post(array('post_type'=>'page', 'post_status'=>'publish', 'post_name'=>'hotel-jobs', 'post_title'=>'وظائف'));
 $wp_query = new WP_Query(array('page_id'=>$board));
 $wp_the_query = $wp_query;
 $_GET = array('mh_country'=>'test-country');
 $robots = apply_filters('wp_robots', array());
-assert_job(empty($robots['noindex']), 'known gap: Lite alone does not add noindex on filtered board');
+assert_job(empty($robots['noindex']), 'valid country-only board remains indexable');
+
+// Populate a generated draft through the private bridge, never through public meta.
+$fresh = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'draft',
+    'post_title'=>'موظف استقبال', 'post_name'=>'ma-jobs-' . str_repeat('a', 32)));
+$bridge = function ($method, $id, $payload = array()) {
+    $r = new WP_REST_Request($method, '/mahotels-jobs/v1/draft-fields/' . $id);
+    foreach ($payload as $key=>$value) { $r->set_param($key, $value); }
+    return rest_do_request($r);
+};
+$payload = array('source'=>'marriott', 'original_id'=>'P1-7571916-0',
+    'source_url'=>'https://careers.marriott.com/job/P1-7571916-0?ref=A%2BB&x=2',
+    'company'=>'فندق اختبار', 'city'=>'الرياض', 'role'=>'موظف استقبال',
+    'posted_on'=>'2026-10-04', 'expires_on'=>'2026-12-20');
+wp_set_current_user($admin->ID);
+$route_options = new WP_REST_Request('OPTIONS', '/mahotels-jobs/v1/draft-fields/1');
+$preflight = rest_do_request($route_options);
+assert_job($preflight->get_status() === 200 && in_array('GET', $preflight->get_data()['methods'], true) &&
+    in_array('POST', $preflight->get_data()['methods'], true), 'draft bridge route can be preflighted before creation');
+wp_set_current_user(0);
+assert_job($bridge('POST', $fresh, $payload)->get_status() === 401, 'anonymous draft write denied');
+assert_job($bridge('GET', $fresh)->get_status() === 401, 'anonymous draft metadata read denied');
+wp_set_current_user($subscriber);
+assert_job($bridge('POST', $fresh, $payload)->get_status() === 403, 'subscriber draft write denied');
+wp_set_current_user($admin->ID);
+$bad = $payload;
+$bad['expires_on'] = '2026-02-30';
+assert_job($bridge('POST', $fresh, $bad)->get_status() === 400, 'bad expiry is rejected');
+assert_job(!metadata_exists('post', $fresh, '_ma_job_source_id'), 'bad input writes no metadata');
+$written = $bridge('POST', $fresh, $payload);
+assert_job($written->get_status() === 200, 'draft fields are written');
+$readback = $bridge('GET', $fresh);
+$fields = $readback->get_data()['fields'];
+assert_job($readback->get_status() === 200 && $fields['source_id'] === 'Marriott:P1-7571916-0', 'legacy source identity stored');
+assert_job($fields['source_url'] === $payload['source_url'], 'draft source URL and parameters unchanged');
+assert_job($fields['company'] === $payload['company'] && $fields['city'] === $payload['city'] && $fields['role'] === $payload['role'], 'core draft fields retained');
+assert_job($fields['posted_on'] === $payload['posted_on'] && $fields['expires_on'] === $payload['expires_on'], 'supplied dates retained');
+assert_job($fields['ar_ready'] === '0' && $fields['verified_on'] === '', 'draft remains unverified and not Arabic-ready');
+assert_job(get_post_status($fresh) === 'draft', 'bridge does not publish');
+assert_job(class_exists('MA_Hotels_Jobs_Lite_SEO') && !MA_Hotels_Jobs_Lite_SEO::eligible($fresh), 'unverified draft remains ineligible for JobPosting');
+assert_job($bridge('POST', $fresh, $payload)->get_status() === 409, 'repeat write requires manual review');
+assert_job($bridge('POST', $active, $payload)->get_status() === 403, 'published item cannot be modified');
 echo "WordPress isolated integration passed\n";
