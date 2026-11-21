@@ -36,6 +36,8 @@ jobs:
           php /tmp/wp.phar core install --path=/tmp/mahotels-wp --url=http://localhost --title=Test --admin_user=admin --admin_password=test-only-password --admin_email=test@example.test --skip-email --quiet
           cp -R wordpress/mahotels-jobs-lite /tmp/mahotels-wp/wp-content/plugins/
           php /tmp/wp.phar plugin activate mahotels-jobs-lite --path=/tmp/mahotels-wp
+      - name: Test job compatibility and draft metadata bridge
+        run: php /tmp/wp.phar eval-file tests/lite-integration.php --path=/tmp/mahotels-wp
       - name: Test SEO hooks against WordPress
         run: php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
       - name: Test coexistence without duplicate SEO hooks
