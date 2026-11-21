@@ -8,6 +8,7 @@
  * Requires PHP: 7.4
  */
 defined('ABSPATH') || exit;
+require_once __DIR__ . '/manual-review.php';
 require_once __DIR__ . '/draft-bridge.php';
 require_once __DIR__ . '/service-scope.php';
 
