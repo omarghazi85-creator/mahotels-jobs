@@ -1,0 +1,40 @@
+name: Isolated Lite WordPress integration
+on:
+  pull_request:
+    branches: [fix/safe-netlify-jobs-20261116]
+    paths:
+      - 'wordpress/mahotels-jobs-lite/**'
+      - 'tests/lite-integration.php'
+      - '.github/workflows/lite-integration.yml'
+permissions:
+  contents: read
+jobs:
+  wordpress:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: isolated-test-password
+          MYSQL_DATABASE: isolated_wp
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pisolated-test-password"
+          --health-interval=10s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: php -l wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php && php -l tests/lite-integration.php
+      - name: Prepare disposable WordPress
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /tmp/wp-cli.phar
+          mkdir /tmp/isolated-wp
+          cd /tmp/isolated-wp
+          php /tmp/wp-cli.phar core download --quiet
+          php /tmp/wp-cli.phar config create --dbname=isolated_wp --dbuser=root --dbpass=isolated-test-password --dbhost=127.0.0.1:3306 --skip-check
+          php /tmp/wp-cli.phar core install --url=http://example.test --title=Test --admin_user=fixture_admin --admin_password=fixture-password --admin_email=fixture@example.test --skip-email
+          cp -R "$GITHUB_WORKSPACE/wordpress/mahotels-jobs-lite" wp-content/plugins/
+          php /tmp/wp-cli.phar plugin activate mahotels-jobs-lite
+      - name: Run isolated integration
+        run: cd /tmp/isolated-wp && php /tmp/wp-cli.phar eval-file "$GITHUB_WORKSPACE/tests/lite-integration.php"
