@@ -9,6 +9,14 @@
  */
 defined('ABSPATH') || exit;
 
+// Register legacy-equivalent SEO hooks only after all plugins have loaded.
+// The older plugin owns them while it is active.
+add_action('plugins_loaded', function () {
+    if (!class_exists('MA_Hotels_Jobs')) {
+        require_once __DIR__ . '/seo-compat.php';
+    }
+});
+
 /**
  * Coexists safely during testing: the old plugin retains full control while
  * active. Existing posts, taxonomies and shortcode content are not modified.

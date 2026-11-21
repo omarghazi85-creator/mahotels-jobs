@@ -1,0 +1,45 @@
+name: Lite SEO isolated WordPress integration
+on:
+  push:
+    branches: [fix/lite-seo-20261121]
+  pull_request:
+    branches: [fix/lite-compatibility-20261121]
+permissions:
+  contents: read
+jobs:
+  wordpress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: test-only
+          MARIADB_DATABASE: wp_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax
+        run: |
+          php -l wordpress/mahotels-jobs-lite/mahotels-jobs-lite.php
+          php -l wordpress/mahotels-jobs-lite/seo-compat.php
+          php -l tests/wordpress-integration/seo-check.php
+      - name: Install isolated WordPress
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /tmp/wp.phar
+          mkdir -p /tmp/mahotels-wp
+          php /tmp/wp.phar core download --path=/tmp/mahotels-wp --quiet
+          php /tmp/wp.phar config create --path=/tmp/mahotels-wp --dbname=wp_test --dbuser=root --dbpass=test-only --dbhost=127.0.0.1:3306 --skip-check --quiet
+          php /tmp/wp.phar core install --path=/tmp/mahotels-wp --url=http://localhost --title=Test --admin_user=admin --admin_password=test-only-password --admin_email=test@example.test --skip-email --quiet
+          cp -R wordpress/mahotels-jobs-lite /tmp/mahotels-wp/wp-content/plugins/
+          php /tmp/wp.phar plugin activate mahotels-jobs-lite --path=/tmp/mahotels-wp
+      - name: Test SEO hooks against WordPress
+        run: php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
+      - name: Test coexistence without duplicate SEO hooks
+        run: |
+          cp tests/wordpress-integration/legacy-fixture.php /tmp/mahotels-wp/wp-content/plugins/legacy-fixture.php
+          php /tmp/wp.phar plugin activate legacy-fixture --path=/tmp/mahotels-wp
+          LITE_TEST_COEXIST=1 php /tmp/wp.phar eval-file tests/wordpress-integration/seo-check.php --path=/tmp/mahotels-wp
