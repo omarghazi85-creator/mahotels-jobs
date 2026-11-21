@@ -46,7 +46,7 @@ scope_assert(rest_do_request($slug_lookup)->get_data() === array('exists'=>true)
 wp_trash_post($id);
 scope_assert(rest_do_request($slug_lookup)->get_data() === array('exists'=>true), 'slug lookup finds trash');
 wp_untrash_post($id);
-$core = new WP_REST_Request('POST', '/wp/v2/ma_hotel_job/'.$id);
+// The WordPress.com content-items tool uses this core-style REST controller.\n// A scoped service role has no core create capability.\n$core_create = new WP_REST_Request('POST', '/wp/v2/ma_hotel_job');\n$core_create->set_param('title', 'Core REST draft');\n$core_create->set_param('status', 'draft');\nscope_assert(rest_do_request($core_create)->get_status() === 403, 'scoped service cannot create through core REST');\n$core = new WP_REST_Request('POST', '/wp/v2/ma_hotel_job/'.$id);
 $core->set_param('status','publish');
 scope_assert(rest_do_request($core)->get_status() === 403, 'core publish denied');
 $core_other = new WP_REST_Request('POST', '/wp/v2/ma_hotel_job/'.$other);
