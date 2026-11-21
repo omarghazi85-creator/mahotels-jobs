@@ -55,3 +55,14 @@ jobs:
           php -r '$r=json_decode(file_get_contents("/tmp/authorized.json"), true); if ($r !== ["exists"=>false]) exit(1);'
           anon_status="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d "$data" 'http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/source-exists')"
           test "$anon_status" = 401
+          test_term="$(php /tmp/wp-cli.phar term list ma_job_country --slug=test-country --field=term_id)"
+          php -r '$t=(int)$argv[1];echo json_encode(["title"=>"Test draft","status"=>"draft","slug"=>"ma-jobs-".str_repeat("c",32),"content"=>"<p>Fixture</p>","ma_job_country"=>[$t]]);' "$test_term" > /tmp/draft-create.json
+          create_status="$(curl -sS -o /tmp/draft-created.json -w '%{http_code}' -u "fixture_admin:$test_app_password" -H 'Content-Type: application/json' --data-binary @/tmp/draft-create.json 'http://127.0.0.1:8888/?rest_route=/wp/v2/ma_hotel_job')"
+          test "$create_status" = 201
+          test_post_id="$(php -r '$r=json_decode(file_get_contents("/tmp/draft-created.json"),true); if (($r["status"]??"")!=="draft" || empty($r["id"])) exit(1); echo (int)$r["id"];')"
+          test_fields='{"source":"marriott","original_id":"TEST-123","source_url":"https://careers.marriott.com/job/TEST-123?ref=A%2BB&x=2","company":"Fixture","city":"Riyadh","role":"Test role","posted_on":"2026-10-04"}'
+          fields_status="$(curl -sS -o /tmp/draft-fields.json -w '%{http_code}' -u "fixture_admin:$test_app_password" -H 'Content-Type: application/json' -d "$test_fields" "http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/draft-fields/$test_post_id")"
+          test "$fields_status" = 200
+          read_status="$(curl -sS -o /tmp/draft-read.json -w '%{http_code}' -u "fixture_admin:$test_app_password" "http://127.0.0.1:8888/?rest_route=/mahotels-jobs/v1/draft-fields/$test_post_id")"
+          test "$read_status" = 200
+          php -r '$r=json_decode(file_get_contents("/tmp/draft-read.json"),true); $f=$r["fields"]??[]; if (($r["status"]??"")!=="draft" || ($f["source_url"]??"")!=="https://careers.marriott.com/job/TEST-123?ref=A%2BB&x=2" || ($f["ar_ready"]??"")!=="0" || ($f["verified_on"]??"")!=="") exit(1);'
