@@ -8,6 +8,9 @@ $id = wp_insert_post(array('post_type'=>'ma_hotel_job','post_status'=>'draft','p
 review_assert(!is_wp_error($id) && $id, 'draft creation failed');
 update_post_meta($id, '_ma_job_ar_ready', '0');
 update_post_meta($id, '_ma_job_verified_on', '2026-11-01');
+do_action('add_meta_boxes_ma_hotel_job', get_post($id));
+ob_start(); do_meta_boxes('ma_hotel_job', 'side', get_post($id)); $ui=ob_get_clean();
+review_assert(strpos($ui, 'mah_lite_ar_ready') !== false, 'editorial review control missing');
 $review_nonce = wp_create_nonce('mah_jobs_lite_review_' . $id);
 $_POST = array('mah_lite_ar_ready'=>'1');
 do_action('save_post_ma_hotel_job', $id);
@@ -25,6 +28,7 @@ if (getenv('LITE_TEST_COEXIST') === '1') {
 }
 $subscriber = wp_create_user('review_subscriber', 'fixture-password', 'review-subscriber@example.test');
 wp_set_current_user($subscriber);
+$_POST['mah_jobs_lite_review_nonce'] = wp_create_nonce('mah_jobs_lite_review_' . $id);
 do_action('save_post_ma_hotel_job', $id);
 review_assert(get_post_meta($id, '_ma_job_ar_ready', true) === '0', 'unauthorized account changed review');
 $editor = wp_create_user('review_editor', 'fixture-password', 'review-editor@example.test');
