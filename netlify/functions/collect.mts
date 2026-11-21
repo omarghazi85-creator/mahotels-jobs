@@ -1,9 +1,123 @@
 import { getStore } from '@netlify/blobs';
+import { dispatchDrafts } from '../../src/daily-policy.mts';
+import { collectMarriott } from '../../src/marriott.mts';
 import type { Config } from '@netlify/functions';
-type SourceJob={id:string;title:string;description:string;apply_url:string;location?:string;country?:string;expires_at?:string};
-const env=(k:string)=>Netlify.env.get(k)||'';
-const valid=(s:string)=>{try{return new URL(s).protocol==='https:'}catch{return false}};
-const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,'0')).join('');
-async function translate(j:SourceJob){const key=env('GROQ_API_KEY');if(!key)return null;const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model:env('GROQ_MODEL')||'openai/gpt-oss-120b',temperature:0.2,response_format:{type:'json_object'},messages:[{role:'system',content:'Translate hotel vacancy faithfully to Arabic. Return JSON keys title,description. Do not invent facts.'},{role:'user',content:JSON.stringify(j)}]})});if(!r.ok)return null;try{const d=await r.json();const v=JSON.parse(d.choices[0].message.content);return typeof v.title==='string'&&typeof v.description==='string'&&v.title.trim()&&v.description.trim()?v:null}catch{return null}}
-export default async()=>{if(env('ENABLE_COLLECTION')!=='true'){console.log('Collection disabled');return}let sources:Record<string,string>;try{sources=JSON.parse(env('JOB_SOURCE_JSON')||'{}')}catch{return}if(!sources||Array.isArray(sources)||typeof sources!=='object')return;const store=getStore('mahotels-jobs-v1');let added=0;for(const [source,url] of Object.entries(sources)){if(!valid(url))continue;try{const r=await fetch(url,{signal:AbortSignal.timeout(12000)});if(!r.ok)continue;const data:unknown=await r.json();if(!Array.isArray(data))continue;for(const raw of data.slice(0,30)){const j=raw as Partial<SourceJob>;if(typeof j.id!=='string'||typeof j.title!=='string'||typeof j.description!=='string'||typeof j.apply_url!=='string'||!valid(j.apply_url)||!j.title.trim()||!j.description.trim())continue;if(j.expires_at&&(!Number.isFinite(Date.parse(j.expires_at))||Date.parse(j.expires_at)<Date.now()))continue;const key=await hash(source+'|'+j.id);if(await store.get(key))continue;const arabic=await translate(j as SourceJob);if(!arabic)break;await store.setJSON(key,{...j,source,key,arabic_title:arabic.title,arabic_description:arabic.description,state:'ready'});added++;if(added>=10)break}}catch(e){console.error('Feed error',source,String(e))}if(added>=10)break}console.log(JSON.stringify({added}))};
-export const config:Config={schedule:'0 2 * * *'};
+import { collectAccor, collectRadisson, collectRotana, normalizeApplyUrl, type Vacancy } from '../../src/sources.mts';
+
+const env = (name: string) => Netlify.env.get(name) ?? '';
+const safeLimit = () => Math.min(2, Math.max(1, Number(env('MAX_JOBS_PER_DAY') || 2) || 2));
+type Translation = { title: string; description: string; requirements: string };
+const responseSchema = {
+  type: 'json_schema', json_schema: {
+    name: 'hotel_job_arabic', strict: true,
+    schema: {
+      type: 'object', additionalProperties: false,
+      properties: { title: { type: 'string' }, description: { type: 'string' }, requirements: { type: 'string' } },
+      required: ['title', 'description', 'requirements']
+    }
+  }
+};
+async function translate(job: Vacancy): Promise<Translation> {
+  const token = env('GROQ_API_KEY');
+  if (!token) throw Error('Missing GROQ_API_KEY');
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(25000),
+    body: JSON.stringify({
+      model: 'openai/gpt-oss-120b', temperature: 0.1, response_format: responseSchema,
+      messages: [
+        { role: 'system', content: 'Translate this hotel job into accurate formal Arabic. Preserve every factual condition and distinguish preferred from required. Do not invent salaries, nationality, credentials, dates, hotel name, experience, or other requirements. Return JSON according to the schema.' },
+        { role: 'user', content: JSON.stringify({ title: job.title, description: job.description, requirements: job.requirements ?? '' }) }
+      ]
+    })
+  });
+  if (!r.ok) throw Error('Groq request failed: HTTP ' + r.status);
+  const data = await r.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const result = JSON.parse(data.choices?.[0]?.message?.content ?? 'null') as Partial<Translation> | null;
+  if (!result || typeof result.title !== 'string' || typeof result.description !== 'string' || typeof result.requirements !== 'string' || !result.title.trim() || !result.description.trim())
+    throw Error('Invalid translation structure');
+  return { title: result.title.trim(), description: result.description.trim(), requirements: result.requirements.trim() };
+}
+const digest = async (value: string) => Array.from(
+  new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))
+).map(x => x.toString(16).padStart(2, '0')).join('');
+
+export default async (request: Request) => {
+  if (request.method !== 'POST') {
+    console.error('Collection requires POST');
+    return;
+  }
+  const token = env('INTERNAL_DISPATCH_TOKEN');
+  const provided = request.headers.get('x-mahotels-dispatch-token') ?? '';
+  if (!token || token.length < 32 || !provided || provided !== token) {
+    console.error('Unauthorized collection invocation');
+    return;
+  }
+  if (env('JOBS_EMERGENCY_STOP') !== 'false' || env('ENABLE_COLLECTION') !== 'true') {
+    console.log('MAHotels collection disabled'); return;
+  }
+  const limit = safeLimit();
+  // Never consume the one-per-day claim when no translation credentials exist.
+  // A valid secret is configured via Netlify, never stored in repository code.
+  if (!env('GROQ_API_KEY').trim()) {
+    console.error('Groq translation not configured; daily claim untouched');
+    return;
+  }
+  // Claim the UTC day atomically before doing paid or external work. Fail closed if interrupted.
+  // This intentionally sacrifices automatic retries to avoid duplicate daily batches.
+  const date = new Date().toISOString().slice(0, 10);
+  const claims = getStore('mahotels-jobs-daily-claims-v1');
+  const claim = await claims.set('daily-' + date, date, { onlyIfNew: true });
+  if (!claim.modified) { console.log('Daily batch already claimed', date); return; }
+  const store = getStore('mahotels-jobs-v1');
+  let collected = 0;
+  let translated = 0;
+  let attempts = 0;
+  const collectors = [collectAccor, collectRadisson, collectRotana, collectMarriott] as const;
+  // Rotate official sources by UTC date so a daily cap of two does not favor Accor forever.
+  const offset = Math.floor(Date.parse(date + 'T00:00:00.000Z') / 86400000) % collectors.length;
+  const dailyOrder = [...collectors.slice(offset), ...collectors.slice(0, offset)];
+  for (const collect of dailyOrder) {
+    if (collected >= limit || attempts >= limit) break;
+    let jobs: Vacancy[];
+    try { jobs = await collect(5); }
+    catch (error) { console.error('Source failure', String(error)); continue; }
+    for (const job of jobs) {
+      if (collected >= limit || attempts >= limit) break;
+      if (!normalizeApplyUrl(job.applyUrl)) continue;
+      if (job.expiresAt && Date.parse(job.expiresAt) < Date.now()) continue;
+      const key = await digest(job.source + '|' + job.originalId);
+      if (await store.get(key)) continue;
+      attempts++;
+      try {
+        const arabic = await translate(job);
+        const result = await store.setJSON(key, {
+          ...job, key, state: 'ready', apply_url: job.applyUrl,
+          arabic_title: arabic.title, arabic_description: arabic.description,
+          arabic_requirements: arabic.requirements
+        }, { onlyIfNew: true });
+        if (result.modified) { collected++; translated++; }
+      } catch (error) {
+        console.error('Translation or state save failed', job.source, job.originalId, String(error));
+      }
+    }
+  }
+  console.log(JSON.stringify({ collected, translated, attempts, limit }));
+  // Separate opt-in: the first verified manual draft is a prerequisite checked
+  // independently by the writer. Both operations remain stopped by default.
+  if (env('ENABLE_DAILY_DRAFTS') !== 'true' || env('ENABLE_WP_SYNC') !== 'true' ||
+      env('WP_DRAFT_ONLY') !== 'true' || env('WP_JOB_SCHEMA_VERIFIED') !== 'true') return;
+  const site = env('URL');
+  if (!/^https:\/\/[-a-z0-9.]+$/i.test(site)) { console.error('Invalid site URL'); return; }
+  await dispatchDrafts(limit, () => env('JOBS_EMERGENCY_STOP') !== 'false', async () => {
+    const response = await fetch(new URL('/.netlify/functions/publish', site), {
+      method:'POST', headers:{'x-mahotels-dispatch-token':token}, signal:AbortSignal.timeout(120000)
+    });
+    if (!response.ok) { console.error('Draft dispatch stopped', response.status); return {ok:false}; }
+    const data = await response.json() as {drafts_created?:number};
+    return {ok:true, draftsCreated:data.drafts_created};
+  });
+};
+// Long-running collection runs separately from the short scheduled dispatcher.
+export const config: Config = { background: true };
