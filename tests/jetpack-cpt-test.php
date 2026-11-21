@@ -1,13 +1,28 @@
 <?php
 /** Disposable WordPress fixture. No production post types are modified. */
 function cpt_assert($condition, $label) { if (!$condition) { fwrite(STDERR, "FAIL: $label\n"); exit(1); } }
+// Translate only the test CPT's custom capabilities to existing WordPress
+// editorial rights at request time. Never persist or grant global capabilities.
+add_filter('user_has_cap', function ($allcaps, $caps) {
+    $map = array('mah_edit_scope_jobs'=>'edit_posts', 'mah_assign_scope_terms'=>'edit_posts',
+        'edit_others_mah_scope_jobs'=>'edit_others_posts', 'publish_mah_scope_jobs'=>'publish_posts',
+        'read_private_mah_scope_jobs'=>'read_private_posts', 'delete_mah_scope_jobs'=>'delete_posts',
+        'delete_others_mah_scope_jobs'=>'delete_others_posts', 'delete_published_mah_scope_jobs'=>'delete_published_posts',
+        'delete_private_mah_scope_jobs'=>'delete_private_posts', 'edit_published_mah_scope_jobs'=>'edit_published_posts',
+        'edit_private_mah_scope_jobs'=>'edit_private_posts');
+    foreach ($caps as $cap) {
+        if (isset($map[$cap]) && !empty($allcaps[$map[$cap]])) { $allcaps[$cap] = true; }
+        if (in_array($cap, array('mah_edit_scope_jobs','mah_assign_scope_terms'), true) && !empty($allcaps['mah_jobs_service'])) { $allcaps[$cap] = true; }
+    }
+    return $allcaps;
+},10,2);
 register_post_type('mah_scope_job', array(
     'public'=>true, 'show_in_rest'=>true, 'map_meta_cap'=>true,
     'supports'=>array('title','editor','custom-fields'),
     'capability_type'=>array('mah_scope_job','mah_scope_jobs'),
     'capabilities'=>array(
         'edit_post'=>'edit_mah_scope_job', 'read_post'=>'read_mah_scope_job', 'delete_post'=>'delete_mah_scope_job',
-        'edit_posts'=>'mah_jobs_service', 'create_posts'=>'mah_jobs_service',
+        'edit_posts'=>'mah_edit_scope_jobs', 'create_posts'=>'mah_edit_scope_jobs',
         'edit_others_posts'=>'edit_others_mah_scope_jobs', 'publish_posts'=>'publish_mah_scope_jobs',
         'read_private_posts'=>'read_private_mah_scope_jobs', 'delete_posts'=>'delete_mah_scope_jobs',
         'delete_others_posts'=>'delete_others_mah_scope_jobs', 'delete_published_posts'=>'delete_published_mah_scope_jobs',
@@ -18,7 +33,7 @@ register_post_type('mah_scope_job', array(
 register_taxonomy('mah_scope_country','mah_scope_job',array(
     'public'=>true, 'show_in_rest'=>true,
     'capabilities'=>array('manage_terms'=>'manage_mah_scope_terms','edit_terms'=>'edit_mah_scope_terms',
-        'delete_terms'=>'delete_mah_scope_terms','assign_terms'=>'mah_jobs_service'),
+        'delete_terms'=>'delete_mah_scope_terms','assign_terms'=>'mah_assign_scope_terms'),
 ));
 register_post_meta('mah_scope_job','_mah_scope_source',array(
     'single'=>true, 'type'=>'string', 'show_in_rest'=>true,
@@ -64,6 +79,18 @@ cpt_assert(rest_do_request($edit)->get_status()===403,'cannot edit another autho
 $create_publish=new WP_REST_Request('POST','/wp/v2/mah_scope_job');
 $create_publish->set_param('title','Publish attempt'); $create_publish->set_param('status','publish');
 cpt_assert(rest_do_request($create_publish)->get_status()===403,'cannot create published post');
+// Existing editors retain their former ability to edit others and publish.
+wp_set_current_user($admin->ID);
+$editor_id=wp_create_user('fixture_editor','test-only-password','editor@example.test');
+cpt_assert(!is_wp_error($editor_id),'create disposable editor');
+$editor=new WP_User($editor_id); $editor->set_role('editor');
+wp_set_current_user($editor_id);
+$editor_edit=new WP_REST_Request('POST','/wp/v2/mah_scope_job/'.$other);
+$editor_edit->set_param('title','Edited by editor');
+cpt_assert(rest_do_request($editor_edit)->get_status()===200,'editor can edit another author draft');
+$editor_publish=new WP_REST_Request('POST','/wp/v2/mah_scope_job/'.$other);
+$editor_publish->set_param('status','publish');
+cpt_assert(rest_do_request($editor_publish)->get_status()===200 && get_post_status($other)==='publish','editor retains publish capability');
 wp_set_current_user(0);
 cpt_assert(rest_do_request($request)->get_status()===401,'anonymous rejected');
 echo "Custom CPT capability fixture passed\n";
