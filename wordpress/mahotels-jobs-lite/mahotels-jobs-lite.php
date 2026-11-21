@@ -8,6 +8,7 @@
  * Requires PHP: 7.4
  */
 defined('ABSPATH') || exit;
+require_once __DIR__ . '/draft-bridge.php';
 
 /** Historical legacy 0.6.5 format; verify against installed 0.7.0 before use. */
 function mah_jobs_lite_active_clause() {
