@@ -9,6 +9,72 @@
  */
 defined('ABSPATH') || exit;
 
+/** Historical legacy 0.6.5 format; verify against installed 0.7.0 before use. */
+function mah_jobs_lite_active_clause() {
+    return array('relation' => 'OR',
+        array('key' => '_ma_job_expires_on', 'compare' => 'NOT EXISTS'),
+        array('key' => '_ma_job_expires_on', 'value' => '', 'compare' => '='),
+        array('key' => '_ma_job_expires_on', 'value' => current_time('Y-m-d'), 'compare' => '>=', 'type' => 'DATE')
+    );
+}
+
+function mah_jobs_lite_fields() {
+    return array('company' => 'الفندق أو الجهة', 'city' => 'المدينة', 'role' => 'المسمى الوظيفي', 'source_url' => 'رابط الإعلان الأصلي', 'posted_on' => 'تاريخ الإعلان YYYY-MM-DD', 'expires_on' => 'تاريخ الانتهاء YYYY-MM-DD', 'verified_on' => 'تاريخ التحقق YYYY-MM-DD');
+}
+add_action('add_meta_boxes_ma_hotel_job', function () {
+    if (class_exists('MA_Hotels_Jobs')) { return; }
+    add_meta_box('mah_jobs_lite_details', 'تفاصيل الوظيفة ومصدرها', function ($post) {
+        wp_nonce_field('mah_jobs_lite_save', 'mah_jobs_lite_nonce');
+        foreach (mah_jobs_lite_fields() as $key => $label) {
+            printf('<p><label for="mah-lite-%1$s">%2$s</label><br><input class="widefat" id="mah-lite-%1$s" name="mah_lite_%1$s" type="%3$s" value="%4$s"></p>', esc_attr($key), esc_html($label), $key === 'source_url' ? 'url' : 'text', esc_attr(get_post_meta($post->ID, '_ma_job_' . $key, true)));
+        }
+    }, 'ma_hotel_job', 'normal');
+});
+add_action('save_post_ma_hotel_job', function ($id) {
+    if (class_exists('MA_Hotels_Jobs') || wp_is_post_revision($id) || !current_user_can('edit_post', $id) || !isset($_POST['mah_jobs_lite_nonce']) || !is_string($_POST['mah_jobs_lite_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mah_jobs_lite_nonce'])), 'mah_jobs_lite_save')) { return; }
+    foreach (mah_jobs_lite_fields() as $key => $label) {
+        $field = 'mah_lite_' . $key;
+        if (!isset($_POST[$field]) || !is_string($_POST[$field])) { continue; }
+        $value = wp_unslash($_POST[$field]);
+        if ($key === 'source_url') { $value = esc_url_raw($value, array('http', 'https')); }
+        elseif (in_array($key, array('posted_on', 'expires_on', 'verified_on'), true)) {
+            if ($value !== '') {
+                $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+                // Preserve existing metadata when input is invalid, rather than silently clearing it.
+                if (!$date || $date->format('Y-m-d') !== $value) { continue; }
+            }
+        } else { $value = sanitize_text_field($value); }
+        update_post_meta($id, '_ma_job_' . $key, $value);
+    }
+});
+
+// The legacy version owns details while it is active. Avoid duplicating output.
+add_filter('the_content', function ($content) {
+    if (class_exists('MA_Hotels_Jobs') || !is_singular('ma_hotel_job') || !in_the_loop() || !is_main_query()) { return $content; }
+    $id = get_the_ID();
+    $fields = array('company' => 'الفندق أو الجهة', 'city' => 'المدينة', 'role' => 'المسمى الوظيفي', 'posted_on' => 'تاريخ الإعلان', 'expires_on' => 'تاريخ الانتهاء', 'verified_on' => 'آخر تحقق');
+    $details = '<dl class="ma-hotel-job-details">';
+    foreach ($fields as $key => $label) {
+        $value = get_post_meta($id, '_ma_job_' . $key, true);
+        if ($value !== '') { $details .= '<dt>' . esc_html($label) . '</dt><dd>' . esc_html($value) . '</dd>'; }
+    }
+    $details .= '</dl>';
+    $expires = get_post_meta($id, '_ma_job_expires_on', true);
+    if ($expires && $expires < current_time('Y-m-d')) { $details .= '<p><strong>انتهت مدة هذا الإعلان، تحقق من المصدر قبل التقديم.</strong></p>'; }
+    $source = get_post_meta($id, '_ma_job_source_url', true);
+    $source = esc_url($source, array('http', 'https'));
+    if ($source) { $content .= '<p class="ma-job-source-note">المصدر: صفحة التوظيف الأصلية لدى الجهة المعلنة. راجع تفاصيلها قبل إرسال طلبك.</p><p><a class="ma-job-apply" href="' . $source . '" rel="noopener noreferrer nofollow" target="_blank">التقديم عبر الإعلان الأصلي ↗</a></p>'; }
+    return $details . $content;
+});
+
+add_action('pre_get_posts', function ($query) {
+    if (class_exists('MA_Hotels_Jobs') || is_admin() || !$query->is_main_query() || !($query->is_post_type_archive('ma_hotel_job') || $query->is_tax('ma_job_country'))) { return; }
+    $existing = $query->get('meta_query');
+    $existing = is_array($existing) ? $existing : array();
+    $existing[] = mah_jobs_lite_active_clause();
+    $query->set('meta_query', $existing);
+});
+
 /**
  * Coexists safely during testing: the old plugin retains full control while
  * active. Existing posts, taxonomies and shortcode content are not modified.
@@ -83,12 +149,14 @@ function mah_jobs_lite_shortcode($atts = array()) {
     $page = is_scalar($page_input) ? max(1, absint(wp_unslash($page_input))) : 1;
     $country_input = isset($_GET['mh_country']) ? $_GET['mh_country'] : ($_GET['mhj_country'] ?? '');
     $country_input = is_scalar($country_input) ? sanitize_text_field(wp_unslash((string) $country_input)) : '';
-    $city = isset($_GET['mhj_city']) && is_string($_GET['mhj_city'])
-        ? sanitize_text_field(wp_unslash($_GET['mhj_city'])) : '';
-    $job_title = isset($_GET['mhj_job']) && is_string($_GET['mhj_job'])
-        ? sanitize_text_field(wp_unslash($_GET['mhj_job'])) : '';
-    $month = isset($_GET['mhj_month']) ? absint(wp_unslash($_GET['mhj_month'])) : 0;
-    $year = isset($_GET['mhj_year']) ? absint(wp_unslash($_GET['mhj_year'])) : 0;
+    $city_input = $_GET['mh_city'] ?? $_GET['mhj_city'] ?? '';
+    $role_input = $_GET['mh_role'] ?? $_GET['mhj_job'] ?? '';
+    $city = is_scalar($city_input) ? sanitize_text_field(wp_unslash((string) $city_input)) : '';
+    $job_title = is_scalar($role_input) ? sanitize_text_field(wp_unslash((string) $role_input)) : '';
+    $month_input = $_GET['mh_month'] ?? $_GET['mhj_month'] ?? '';
+    $year_input = $_GET['mh_year'] ?? $_GET['mhj_year'] ?? '';
+    $month = is_scalar($month_input) ? absint(wp_unslash($month_input)) : 0;
+    $year = is_scalar($year_input) ? absint(wp_unslash($year_input)) : 0;
     $month = ($month >= 1 && $month <= 12) ? $month : 0;
     $year = ($year >= 2015 && $year <= (int) gmdate('Y') + 1) ? $year : 0;
 
@@ -112,9 +180,7 @@ function mah_jobs_lite_shortcode($atts = array()) {
         'order' => 'DESC',
         'no_found_rows' => false,
         'ignore_sticky_posts' => true,
-        // Search uses WordPress's built-in indexed post search, not slow custom
-        // meta scans. It matches title and city text across title/body.
-        's' => trim($city . ' ' . $job_title),
+        'meta_query' => array(mah_jobs_lite_active_clause()),
     );
     if ($country) {
         $args['tax_query'] = array(array(
@@ -125,12 +191,11 @@ function mah_jobs_lite_shortcode($atts = array()) {
         ));
     }
 
-    if ($month || $year) {
-        $date_clause = array('inclusive' => true);
-        if ($month) { $date_clause['month'] = $month; }
-        if ($year) { $date_clause['year'] = $year; }
-        $args['date_query'] = array($date_clause);
-    }
+    if ($city) { $args['meta_query'][] = array('key' => '_ma_job_city', 'value' => $city, 'compare' => '='); }
+    if ($job_title) { $args['meta_query'][] = array('key' => '_ma_job_role', 'value' => $job_title, 'compare' => '='); }
+    if ($year) { $args['meta_query'][] = array('key' => '_ma_job_posted_on', 'value' => '^' . $year . '-', 'compare' => 'REGEXP'); }
+    if ($month) { $args['meta_query'][] = array('key' => '_ma_job_posted_on', 'value' => '^[0-9]{4}-' . sprintf('%02d', $month) . '-', 'compare' => 'REGEXP'); }
+    if ($country_input !== '' && !$country) { $args['post__in'] = array(0); }
     $jobs = new WP_Query($args);
     ob_start();
     ?>
@@ -166,18 +231,18 @@ function mah_jobs_lite_shortcode($atts = array()) {
                 <?php endforeach; ?>
             </select>
             <label for="mhj-city"><?php echo esc_html('المدينة'); ?></label>
-            <input id="mhj-city" name="mhj_city" type="search" maxlength="100" value="<?php echo esc_attr($city); ?>" />
+            <input id="mhj-city" name="mh_city" type="search" maxlength="100" value="<?php echo esc_attr($city); ?>" />
             <label for="mhj-job"><?php echo esc_html('الوظيفة'); ?></label>
-            <input id="mhj-job" name="mhj_job" type="search" maxlength="100" value="<?php echo esc_attr($job_title); ?>" />
+            <input id="mhj-job" name="mh_role" type="search" maxlength="100" value="<?php echo esc_attr($job_title); ?>" />
             <label for="mhj-month"><?php echo esc_html('شهر الإعلان'); ?></label>
-            <select id="mhj-month" name="mhj_month">
+            <select id="mhj-month" name="mh_month">
                 <option value="0"><?php echo esc_html('جميع الشهور'); ?></option>
                 <?php for ($i = 1; $i <= 12; $i++) : ?>
                   <option value="<?php echo esc_attr((string) $i); ?>" <?php selected($month, $i); ?>><?php echo esc_html((string) $i); ?></option>
                 <?php endfor; ?>
             </select>
             <label for="mhj-year"><?php echo esc_html('سنة الإعلان'); ?></label>
-            <select id="mhj-year" name="mhj_year">
+            <select id="mhj-year" name="mh_year">
                 <option value="0"><?php echo esc_html('جميع السنوات'); ?></option>
                 <?php for ($i = (int) gmdate('Y'); $i >= 2015; $i--) : ?>
                   <option value="<?php echo esc_attr((string) $i); ?>" <?php selected($year, $i); ?>><?php echo esc_html((string) $i); ?></option>
