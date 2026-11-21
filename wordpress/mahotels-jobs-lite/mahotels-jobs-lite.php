@@ -9,6 +9,7 @@
  */
 defined('ABSPATH') || exit;
 require_once __DIR__ . '/draft-bridge.php';
+require_once __DIR__ . '/service-scope.php';
 
 // SEO ownership remains with the legacy plugin while it is active.
 add_action('plugins_loaded', function () {
@@ -39,7 +40,7 @@ add_action('rest_api_init', function () {
     register_rest_route('mahotels-jobs/v1', '/source-exists', array(
         'methods' => 'POST',
         'permission_callback' => function () {
-            return current_user_can('edit_posts') && current_user_can('edit_others_posts');
+            return current_user_can('mah_jobs_service') || (current_user_can('edit_posts') && current_user_can('edit_others_posts'));
         },
         'callback' => function ($request) {
             $url = $request->get_param('source_url');
