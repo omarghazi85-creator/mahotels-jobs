@@ -33,7 +33,7 @@ jobs:
           mkdir -p /tmp/mahotels-wp
           php /tmp/wp.phar core download --path=/tmp/mahotels-wp --quiet
           php /tmp/wp.phar config create --path=/tmp/mahotels-wp --dbname=wp_test --dbuser=root --dbpass=test-only --dbhost=127.0.0.1:3306 --skip-check --quiet
-          php /tmp/wp.phar core install --path=/tmp/mahotels-wp --url=http://localhost --title=Test --admin_user=admin --admin_password=test-only-password --admin_email=test@example.test --skip-email --quiet
+          php /tmp/wp.phar core install --path=/tmp/mahotels-wp --url=http://localhost --title=Test --admin_user=fixture_admin --admin_password=test-only-password --admin_email=test@example.test --skip-email --quiet
           cp -R wordpress/mahotels-jobs-lite /tmp/mahotels-wp/wp-content/plugins/
           php /tmp/wp.phar plugin activate mahotels-jobs-lite --path=/tmp/mahotels-wp
       - name: Test job compatibility and draft metadata bridge
