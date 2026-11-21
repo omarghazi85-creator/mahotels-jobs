@@ -76,6 +76,15 @@ assert_job($other->get_status() === 200 && $other->get_data() === array('exists'
 $other_id = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'draft', 'post_title'=>'إعلان آخر'));
 update_post_meta($other_id, '_ma_job_source_url', 'https://example.com/apply?x=1&y=3');
 assert_job($lookup('https://example.com/apply?x=1&y=3')->get_data() === array('exists'=>true), 'new source is found immediately after a previous miss');
+// Simulate a missing metadata table on the disposable database and fail closed.
+global $wpdb;
+$original_postmeta_table = $wpdb->postmeta;
+$wpdb->postmeta = $original_postmeta_table . '_missing_fixture';
+$old_suppression = $wpdb->suppress_errors(true);
+$failure = $lookup('https://example.com/apply?x=1&y=2');
+$wpdb->postmeta = $original_postmeta_table;
+$wpdb->suppress_errors($old_suppression);
+assert_job($failure->get_status() === 503, 'database failure does not look like a clean duplicate check');
 $draft = wp_insert_post(array('post_type'=>'ma_hotel_job', 'post_status'=>'draft', 'post_title'=>'مسودة'));
 update_post_meta($draft, '_ma_job_source_url', 'https://example.com/draft?id=10');
 assert_job($lookup('https://example.com/draft?id=10')->get_data() === array('exists'=>true), 'draft considered for duplicates');
