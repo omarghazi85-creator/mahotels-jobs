@@ -38,10 +38,14 @@ add_action('rest_api_init', function () {
                 return new WP_Error('invalid_source', 'Invalid source identity.', array('status' => 400));
             }
             $parts = wp_parse_url($url);
-            $hosts = array('api.smartrecruiters.com', 'jobs.smartrecruiters.com', 'careers.marriott.com',
-                'careers.rotana.com', 'apply.workable.com', 'rotana-hotels.workable.com', 'www.workable.com');
+            $hosts = array(
+                'accor' => array('api.smartrecruiters.com', 'jobs.smartrecruiters.com'),
+                'radisson' => array('api.smartrecruiters.com', 'jobs.smartrecruiters.com'),
+                'marriott' => array('careers.marriott.com'),
+                'rotana' => array('careers.rotana.com', 'apply.workable.com', 'rotana-hotels.workable.com', 'www.workable.com'),
+            );
             if (!is_array($parts) || strtolower($parts['scheme'] ?? '') !== 'https' ||
-                !in_array(strtolower($parts['host'] ?? ''), $hosts, true) || isset($parts['user']) || isset($parts['pass'])) {
+                !in_array(strtolower($parts['host'] ?? ''), $hosts[$source], true) || isset($parts['user']) || isset($parts['pass'])) {
                 return new WP_Error('invalid_source_url', 'Invalid source URL.', array('status' => 400));
             }
             $data = array('source_id'=>$providers[$source] . ':' . $original_id, 'source_url'=>$url, 'ar_ready'=>'0');
